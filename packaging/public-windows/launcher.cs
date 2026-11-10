@@ -1,9 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Forms;
 
@@ -26,39 +24,26 @@ internal static class Launcher
         try
         {
             var folder = AppDomain.CurrentDomain.BaseDirectory;
-            var runtime = Environment.GetEnvironmentVariable("MAGIC_CONVERTER_PUBLIC_RUNTIME");
-            if (String.IsNullOrEmpty(runtime))
-                runtime = Path.Combine(folder, ".runtime");
-            else if (!Path.IsPathRooted(runtime))
-                throw new InvalidOperationException("런타임 경로는 절대 경로여야 합니다.");
-            runtime = Path.GetFullPath(runtime);
-            var python = Path.Combine(runtime, "Scripts", "python.exe");
-            if (!File.Exists(python) || !File.Exists(Path.Combine(runtime, "pyvenv.cfg")))
-                throw new InvalidOperationException("MagicConverter 런타임이 필요합니다.\nGitHub Releases의 Windows 설치 안내에 따라 .runtime을 준비하세요.");
+            var python = Path.Combine(folder, "runtime", "python.exe");
+            var source = Path.Combine(folder, "app", "run_magic_converter.py");
+            if (!File.Exists(python) || !File.Exists(source))
+                throw new InvalidOperationException("MagicConverter-Setup.exe로 앱과 런타임을 먼저 설치하세요.");
 
-            var source = ExtractSource(runtime);
-            var arguments = new StringBuilder();
+            var arguments = new StringBuilder("-X utf8 -B ");
             if (Gui || selfTest)
-                arguments.Append(Quote(Path.Combine(source, "run_magic_converter.py")));
+                arguments.Append(WindowsArguments.Quote(source));
             else
             {
-                arguments.Append("-c ").Append(Quote("import sys; from magic_converter.cli import run; sys.exit(run(sys.argv[1:] or ['--help']))"));
+                arguments.Append("-c ").Append(WindowsArguments.Quote("import sys; from magic_converter.cli import run; sys.exit(run(sys.argv[1:] or ['--help']))"));
             }
             foreach (var arg in args)
-                arguments.Append(' ').Append(Quote(arg));
+                arguments.Append(' ').Append(WindowsArguments.Quote(arg));
 
             var start = new ProcessStartInfo(python, arguments.ToString());
             start.UseShellExecute = false;
             start.CreateNoWindow = Gui;
             start.RedirectStandardError = Gui;
-            start.EnvironmentVariables.Remove("PYTHONHOME");
-            start.EnvironmentVariables.Remove("PYTHONEXECUTABLE");
             start.EnvironmentVariables.Remove("__PYVENV_LAUNCHER__");
-            start.EnvironmentVariables["PYTHONPATH"] = source;
-            start.EnvironmentVariables["PYTHONSAFEPATH"] = "1";
-            start.EnvironmentVariables["PYTHONNOUSERSITE"] = "1";
-            start.EnvironmentVariables["PYTHONUTF8"] = "1";
-            start.EnvironmentVariables["PYTHONDONTWRITEBYTECODE"] = "1";
             start.EnvironmentVariables["MAGIC_CONVERTER_PUBLIC_GUI"] = Path.Combine(folder, "magic_converter.exe");
             if (!Gui)
                 Console.CancelKeyPress += (sender, signal) => signal.Cancel = true;
@@ -90,50 +75,4 @@ internal static class Launcher
         }
     }
 
-    private static string ExtractSource(string runtime)
-    {
-        using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("magic-converter.zip"))
-        using (var sha = SHA256.Create())
-        {
-            var name = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
-            var parent = Directory.CreateDirectory(Path.Combine(runtime, "magic-converter-app")).FullName;
-            var final = Path.Combine(parent, name);
-            if (Directory.Exists(final))
-                return final;
-            var staging = Directory.CreateDirectory(Path.Combine(parent, Guid.NewGuid().ToString("N"))).FullName;
-            try
-            {
-                stream.Position = 0;
-                using (var archive = new ZipArchive(stream, ZipArchiveMode.Read))
-                    archive.ExtractToDirectory(staging);
-                try { Directory.Move(staging, final); }
-                catch (IOException) { if (!Directory.Exists(final)) throw; }
-                return final;
-            }
-            finally
-            {
-                if (Directory.Exists(staging))
-                    Directory.Delete(staging, true);
-            }
-        }
-    }
-
-    // ProcessStartInfo uses a command line string on .NET Framework.
-    private static string Quote(string value)
-    {
-        var output = new StringBuilder("\"");
-        int slashes = 0;
-        foreach (char character in value)
-        {
-            if (character == '\\')
-            {
-                slashes++;
-                continue;
-            }
-            output.Append('\\', character == '"' ? slashes * 2 + 1 : slashes);
-            output.Append(character);
-            slashes = 0;
-        }
-        return output.Append('\\', slashes * 2).Append('"').ToString();
-    }
 }

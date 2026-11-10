@@ -1,4 +1,4 @@
-MagicConverter Windows launcher distribution
+MagicConverter Windows installer distribution
 
 MagicConverter and its original artwork are licensed under AGPL-3.0-or-later.
 The license is included in the application archive and corresponding source.
@@ -7,5 +7,6 @@ Filee is credited in licenses/Filee-MIT.txt. The blank HWPX template is from
 python-hwpx and carries its Apache-2.0 LICENSE, NOTICE and source reference
 under magic_converter/data/hwpx.
 
-Python, the wheels in magic_converter-runtime.txt, FFmpeg/FFprobe, rhwp,
-by their own publishers. They are installed separately when needed.
+Setup uses Python from Python.org and the pinned wheels from PyPI after consent.
+Users can prepare those publisher files on a connected computer and carry them
+to an offline computer. FFmpeg/FFprobe, rhwp, the Visual C++ runtime for rhwp

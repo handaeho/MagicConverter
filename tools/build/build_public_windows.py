@@ -1,4 +1,4 @@
-"""Build Windows launchers that distribute MagicConverter source and data only."""
+"""Build the Windows installer and the source needed to rebuild it."""
 
 import argparse
 import hashlib
@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
@@ -30,6 +31,7 @@ magic_converter/data/hwpx/SOURCE.txt magic_converter/data/hwpx/Skeleton.hwpx
 SOURCE_INPUTS = """
 assets/README.md assets/magic_converter-tool.svg docs/user/PUBLIC_WINDOWS.md
 packaging/app.manifest packaging/public-windows/launcher.cs requirements/windows-py314.lock
+packaging/public-windows/setup.cs packaging/public-windows/process_arguments.cs
 tests/documents/test_hwp_objects.py tools/build/generate_icon.py
 tools/build/build_public_windows.py
 """.split()
@@ -72,7 +74,19 @@ def runtime_lock(inputs):
             selected[package] = line
     if selected.keys() != RUNTIME_PACKAGES:
         raise ValueError("Missing locked runtime wheels: " + ", ".join(sorted(RUNTIME_PACKAGES - selected.keys())))
-    return ("# Windows x64, Python 3.14.7\n" + "\n".join(sorted(selected.values())) + "\n").encode()
+    return ("# Windows x64, CPython 3.14\n" + "\n".join(sorted(selected.values())) + "\n").encode()
+
+
+def compile_exe(compiler, temp, output, entry, target, *options):
+    subprocess.run([
+        str(compiler), "/nologo", "/warnaserror+", "/optimize+", "/platform:x64", "/codepage:65001",
+        "/target:" + target, "/out:" + str(output), *options,
+        "/win32manifest:" + str(ROOT / "packaging/app.manifest"),
+        "/win32icon:" + str(ROOT / "assets/magic_converter-tool.ico"),
+        "/reference:System.Windows.Forms.dll",
+        str(ROOT / "packaging/public-windows" / entry),
+        str(ROOT / "packaging/public-windows/process_arguments.cs"), "version.cs",
+    ], cwd=temp, check=True)
 
 
 def build(output):
@@ -84,7 +98,11 @@ def build(output):
         if sha(app["licenses/stage7/" + item["file"]]) != item["sha256"]:
             raise ValueError("Changed stage-7 license: " + item["file"])
     version, = re.findall(r'^__version__ = "([0-9]+\.[0-9]+\.[0-9]+)"\r?$', app["magic_converter/__init__.py"].decode(), re.M)
-    payload = zip_bytes(app)
+    identity = ET.fromstring(config["packaging/app.manifest"]).find(
+        "{urn:schemas-microsoft-com:asm.v1}assemblyIdentity"
+    )
+    if identity is None or identity.get("version") != version + ".0":
+        raise ValueError("Windows manifest and app versions differ")
     lock = runtime_lock(config["requirements/windows-py314.lock"])
     source = {**app, **config, "magic_converter-runtime.txt": lock}
     source_zip = zip_bytes(source)
@@ -102,7 +120,6 @@ def build(output):
         temp = Path(work)
         ready = temp / "release"
         ready.mkdir()
-        (temp / "app.zip").write_bytes(payload)
         (temp / "version.cs").write_text(
             "using System.Reflection;\n"
             '[assembly: AssemblyTitle("MagicConverter")]\n'
@@ -110,28 +127,33 @@ def build(output):
             f'[assembly: AssemblyFileVersion("{version}.0")]\n',
             encoding="ascii",
         )
-        for target, name in (("winexe", "magic_converter.exe"), ("exe", "magic_converter-cli.exe")):
-            flags = ["/define:GUI"] if target == "winexe" else []
-            path = ready / name
-            subprocess.run([
-                str(compiler), "/nologo", "/optimize+", "/platform:x64", "/codepage:65001",
-                "/target:" + target, "/out:" + str(path), *flags,
-                "/win32manifest:" + str(ROOT / "packaging/app.manifest"),
-                "/win32icon:" + str(ROOT / "assets/magic_converter-tool.ico"),
-                "/reference:System.IO.Compression.dll", "/reference:System.IO.Compression.FileSystem.dll",
-                "/reference:System.Windows.Forms.dll", "/resource:app.zip,magic-converter.zip",
-                str(ROOT / "packaging/public-windows/launcher.cs"), "version.cs",
-            ], cwd=temp, check=True)
-            if path.read_bytes().count(payload) != 1:
-                raise ValueError("EXE does not contain the exact generated application archive: " + name)
-        (ready / "magic_converter-runtime.txt").write_bytes(lock)
+        compile_exe(compiler, temp, temp / "magic_converter.exe", "launcher.cs", "winexe", "/define:GUI")
+        compile_exe(compiler, temp, temp / "magic_converter-cli.exe", "launcher.cs", "exe")
+        setup_files = {
+            **{"app/" + name: data for name, data in app.items()},
+            "magic_converter.exe": (temp / "magic_converter.exe").read_bytes(),
+            "magic_converter-cli.exe": (temp / "magic_converter-cli.exe").read_bytes(),
+            "magic_converter-runtime.txt": lock,
+        }
+        payload = zip_bytes(setup_files)
+        (temp / "setup.zip").write_bytes(payload)
+        setup = ready / "MagicConverter-Setup.exe"
+        compile_exe(
+            compiler, temp, setup, "setup.cs", "winexe",
+            "/reference:System.IO.Compression.dll", "/reference:System.IO.Compression.FileSystem.dll",
+            "/reference:System.Drawing.dll", "/reference:System.Net.Http.dll", "/reference:Microsoft.CSharp.dll",
+            "/resource:setup.zip,magic-converter-setup.zip",
+        )
+        if setup.read_bytes().count(payload) != 1:
+            raise ValueError("Setup does not contain the exact generated application archive")
         (ready / "THIRD_PARTY_NOTICES.txt").write_bytes(app["packaging/public-windows/THIRD_PARTY_NOTICES.txt"])
         (ready / "MagicConverter-corresponding-source.zip").write_bytes(source_zip)
         manifest = {
             "project_version": version,
-            "profile": "Windows x64 launcher with separately installed runtime",
+            "profile": "Windows x64 installer with publisher downloads after consent",
             "compiler_sha256": sha(compiler.read_bytes()),
-            "app_archive_sha256": sha(payload),
+            "setup_archive_sha256": sha(payload),
+            "setup_files": {name: sha(data) for name, data in setup_files.items()},
             "source_archive_sha256": sha(source_zip),
             "app_files": {name: sha(data) for name, data in app.items()},
             "source_files": {name: sha(data) for name, data in source.items()},

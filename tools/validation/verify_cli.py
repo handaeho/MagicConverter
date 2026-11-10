@@ -1,4 +1,4 @@
-"""Exercise the copied console EXE without Python/FFmpeg on its PATH."""
+"""Exercise the console EXE without Python/FFmpeg on its PATH."""
 import argparse
 import base64
 import hashlib
@@ -22,12 +22,14 @@ sys.path.insert(0, str(ROOT))
 parser = argparse.ArgumentParser()
 parser.add_argument("executable")
 parser.add_argument("--report", required=True)
+parser.add_argument("--installed", action="store_true", help="Use the EXE beside its installed app and runtime")
 args = parser.parse_args()
 original = Path(args.executable).resolve()
 root = ROOT / ".test-artifacts" / ("cli-standalone-" + str(time.time_ns()))
 root.mkdir(parents=True)
-executable = root / "magic_converter-cli.exe"
-shutil.copy2(original, executable)
+executable = original if args.installed else root / "magic_converter-cli.exe"
+if not args.installed:
+    shutil.copy2(original, executable)
 environment = os.environ.copy()
 environment["PATH"] = str(Path(os.environ.get("SystemRoot", "C:/Windows")) / "System32")
 for key in ("MAGIC_CONVERTER_FFMPEG", "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH"):
