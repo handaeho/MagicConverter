@@ -10,7 +10,8 @@
 <p align="center">
   <a href="#휠로-변환하기">휠 데모</a> ·
   <a href="#할-수-있는-일">주요 기능</a> ·
-  <a href="#소스로-시작하기">시작하기</a> ·
+  <a href="#windows-다운로드">Windows 다운로드</a> ·
+  <a href="#소스로-시작하기">소스 실행</a> ·
   <a href="#명령줄에서-변환하기">명령줄</a> ·
   <a href="LICENSE">라이선스</a>
 </p>
@@ -39,6 +40,14 @@
 | **반복 작업** | 명령줄로 여러 파일 변환, 감시 폴더에서 새 파일 처리 |
 
 로컬 파일의 변환은 내 PC에서 처리합니다. 일부 형식의 변환이나 인쇄에 필요한 프로그램은 아래에서 확인할 수 있습니다.
+
+## Windows 다운로드
+
+Windows 10·11 64비트용 실행 파일은 [GitHub Releases](https://github.com/handaeho/MagicConverter/releases)에 배포할 예정입니다. 현재는 아래 방법으로 소스를 실행할 수 있습니다.
+
+실행 파일이 게시되면 릴리스의 **Assets**에서 `magic_converter.exe`를 받아 실행하세요. 설치나 Python 설정 없이 열 수 있으며, 작업 표시줄의 알림 영역에 MagicConverter가 나타납니다. PowerShell에서 사용하려면 같은 릴리스의 `magic_converter-cli.exe`를 받아 `.\magic_converter-cli.exe --help`를 실행하세요.
+
+릴리스 안내에서 파일의 SHA-256과 기능별 필요 프로그램을 확인할 수 있습니다. Excel 인쇄와 Office 자동화에는 해당 프로그램이 설치되어 있어야 합니다.
 
 ## 소스로 시작하기
 
