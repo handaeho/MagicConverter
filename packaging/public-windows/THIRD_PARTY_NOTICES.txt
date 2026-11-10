@@ -7,6 +7,23 @@ Filee is credited in licenses/Filee-MIT.txt. The blank HWPX template is from
 python-hwpx and carries its Apache-2.0 LICENSE, NOTICE and source reference
 under magic_converter/data/hwpx.
 
-Setup uses Python from Python.org and the pinned wheels from PyPI after consent.
-Users can prepare those publisher files on a connected computer and carry them
-to an offline computer. FFmpeg/FFprobe, rhwp, the Visual C++ runtime for rhwp
+Setup includes the pinned Windows embeddable distribution of CPython, pip,
+and the Python runtime wheels listed in magic_converter-runtime.txt.
+Python's license is installed in runtime/LICENSE.txt. Wheel license files
+remain in each installed distribution's metadata. The source manifest
+records the hashes of the original embedded archives.
+
+Qt for Python and Qt are available under module-specific terms:
+https://doc.qt.io/qtforpython-6/licenses.html
+https://doc.qt.io/qt-6/licensing.html
+PyMuPDF and MuPDF are offered under AGPL-3.0 or commercial terms:
+https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright
+The pillow-heif 1.8.1 Windows wheel lists libheif 1.23.6, libde265 1.1.3,
+and x265 4.3 in LICENSES_bundled.txt. The wheel's notices also describe
+the compiler runtime terms. See the installed pillow_heif distribution metadata.
+
+The engine archive contains Gyan FFmpeg/FFprobe 9.0.2 (GPL-3.0-or-later),
+rhwp 0.8.7 (MIT), and its app-local Microsoft Visual C++ runtime. Original
+notices are installed under app/vendor/ffmpeg and app/vendor/rhwp.
+FFmpeg source revision: https://github.com/FFmpeg/FFmpeg/commit/946fcce07b6dcd0331c8cc609192aeff5e1924f8
+rhwp source: https://github.com/edwardkim/rhwp/tree/v0.8.7

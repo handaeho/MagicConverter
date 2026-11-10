@@ -8,12 +8,24 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
+from windows_runtime_bundle import write_pinned_archive, write_runtime_archive
+
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from tools.dependencies import fetch_vendor
+
+ENGINE_FILES = frozenset("""
+vendor/ffmpeg/ffmpeg.exe vendor/ffmpeg/ffprobe.exe vendor/ffmpeg/LICENSE vendor/ffmpeg/README.txt
+vendor/rhwp/rhwp.exe vendor/rhwp/LICENSE vendor/rhwp/THIRD_PARTY_LICENSES.md
+vendor/rhwp/msvcp140.dll vendor/rhwp/vcruntime140.dll vendor/rhwp/vcruntime140_1.dll
+vendor/rhwp/runtime-licenses/LICENSE.DOCX vendor/rhwp/runtime-licenses/LICENSE.RTF vendor/rhwp/runtime-licenses/LICENSE.TXT
+""".split())
 RUNTIME_PACKAGES = set("""
 beautifulsoup4 brotli cffi charset-normalizer cryptography defusedxml et-xmlfile
 fonttools lxml markdown olefile openpyxl pdfminer-six pdfplumber pillow pillow-heif
@@ -31,11 +43,14 @@ magic_converter/data/hwpx/SOURCE.txt magic_converter/data/hwpx/Skeleton.hwpx
 SOURCE_INPUTS = """
 assets/README.md assets/magic_converter-tool.svg docs/user/PUBLIC_WINDOWS.md docs/user/UNINSTALL_WINDOWS.md
 packaging/app.manifest packaging/public-windows/launcher.cs requirements/windows-py314.lock
+packaging/public-windows/runtime-bootstrap.json
+packaging/vendor-lock.json tools/__init__.py tools/dependencies/__init__.py tools/dependencies/fetch_vendor.py
 packaging/public-windows/setup.cs packaging/public-windows/process_arguments.cs
 packaging/public-windows/install_location.cs packaging/public-windows/setup_wizard.cs
 packaging/public-windows/uninstall.cs packaging/public-windows/uninstall-files.txt
 tests/documents/test_hwp_objects.py tools/build/generate_icon.py
 tools/build/build_public_windows.py tools/build/build_windows_uninstaller.py
+tools/build/windows_runtime_bundle.py
 """.split()
 
 
@@ -91,7 +106,7 @@ def compile_exe(compiler, temp, output, entry, target, *options):
     ], cwd=temp, check=True)
 
 
-def build(output):
+def build(output, runtime_dir=None, vendor_cache=None):
     config = files(SOURCE_INPUTS)
     license_manifest = json.loads((ROOT / "licenses/stage7/manifest.json").read_text(encoding="utf-8"))
     stage7 = ["licenses/stage7/manifest.json", *("licenses/stage7/" + item["file"] for item in license_manifest)]
@@ -139,12 +154,35 @@ def build(output):
         }
         payload = zip_bytes(setup_files)
         (temp / "setup.zip").write_bytes(payload)
+        bootstrap = json.loads(config["packaging/public-windows/runtime-bootstrap.json"])
+        runtime_digest, runtime_files = write_runtime_archive(temp / "runtime.zip", bootstrap, lock, runtime_dir)
+        vendor = temp / "engines"
+        vendor_manifest = json.loads(config["packaging/vendor-lock.json"])
+        entries = fetch_vendor.targets(vendor, vendor_manifest)
+        if entries.keys() != ENGINE_FILES:
+            raise ValueError("Installer engine inputs must match the FFmpeg and rhwp allowlist")
+        fetch_vendor.acquire(vendor, vendor_cache, offline=vendor_cache is not None, manifest=vendor_manifest)
+        engine_digest, engine_files = write_pinned_archive(
+            temp / "engines.zip", {name: (vendor / name, entry["sha256"]) for name, entry in entries.items()},
+            ZIP_DEFLATED,
+        )
+        (temp / "runtime.cs").write_text(
+            "internal static class RuntimeInfo {\n"
+            f'    internal const string PythonZip = "{bootstrap["python"]["filename"]}";\n'
+            f'    internal const string PipWheel = "{bootstrap["pip"]["filename"]}";\n'
+            f'    internal const string PythonVersion = "{bootstrap["python_version"]}";\n'
+            f'    internal const string ArchiveSha256 = "{runtime_digest}";\n'
+            f'    internal const string EnginesSha256 = "{engine_digest}";\n'
+            "}\n", encoding="ascii",
+        )
         setup = ready / "MagicConverter-Setup.exe"
         compile_exe(
             compiler, temp, setup, "setup.cs", "winexe",
             "/reference:System.IO.Compression.dll", "/reference:System.IO.Compression.FileSystem.dll",
-            "/reference:System.Drawing.dll", "/reference:System.Net.Http.dll", "/reference:Microsoft.CSharp.dll",
+            "/reference:System.Drawing.dll", "/reference:Microsoft.CSharp.dll",
             "/resource:setup.zip,magic-converter-setup.zip",
+            "/resource:runtime.zip,magic-converter-runtime.zip", "runtime.cs",
+            "/resource:engines.zip,magic-converter-engines.zip",
             str(ROOT / "packaging/public-windows/install_location.cs"),
             str(ROOT / "packaging/public-windows/setup_wizard.cs"),
         )
@@ -154,10 +192,14 @@ def build(output):
         (ready / "MagicConverter-corresponding-source.zip").write_bytes(source_zip)
         manifest = {
             "project_version": version,
-            "profile": "Windows x64 installer with publisher downloads after consent",
+            "profile": "Windows x64 installer with embedded Python, runtime wheels, FFmpeg and rhwp",
             "compiler_sha256": sha(compiler.read_bytes()),
             "setup_archive_sha256": sha(payload),
             "setup_files": {name: sha(data) for name, data in setup_files.items()},
+            "runtime_archive_sha256": runtime_digest,
+            "runtime_files": runtime_files,
+            "engine_archive_sha256": engine_digest,
+            "engine_files": engine_files,
             "source_archive_sha256": sha(source_zip),
             "app_files": {name: sha(data) for name, data in app.items()},
             "source_files": {name: sha(data) for name, data in source.items()},
@@ -174,4 +216,7 @@ def build(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    build(parser.parse_args().output)
+    parser.add_argument("--runtime-dir", type=Path, help="Use local copies of the pinned publisher inputs")
+    parser.add_argument("--vendor-cache", type=Path, help="Use the pinned local FFmpeg and rhwp archives")
+    options = parser.parse_args()
+    build(options.output, options.runtime_dir, options.vendor_cache)

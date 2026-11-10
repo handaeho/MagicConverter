@@ -1,5 +1,19 @@
 # Third-party components
 
+## Windows installer candidate 2.2.31
+
+The installer candidate embeds CPython 3.14.10, 34 pinned Python wheels, Gyan
+FFmpeg and FFprobe 9.0.2, rhwp 0.8.7 and the app-local Microsoft VC runtime.
+The engine license files and notices are installed under `app/vendor`.
+[Installer notices](../../packaging/public-windows/THIRD_PARTY_NOTICES.txt)
+
+Public installer distribution requires a source review for the shipped native
+builds. The outstanding items include the static FFmpeg codecs, Qt/PySide,
+PyMuPDF/MuPDF and the HEIC wheel's native build inputs, plus redistribution
+evidence for the app-local Microsoft DLLs.
+
+## Earlier internal PyInstaller package
+
 magic_converter bundles Python, PySide6/Qt, Pillow, FFmpeg, and FFprobe.
 Version 1.4 also uses PyMuPDF/MuPDF, pypdfium2/PDFium, pypdf, pillow-heif/libheif,
 python-pptx, python-docx, openpyxl, pdfplumber/pdfminer.six, Markdown,

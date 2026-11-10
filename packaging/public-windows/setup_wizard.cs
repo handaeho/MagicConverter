@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
@@ -35,7 +36,6 @@ internal sealed class SetupWizard : Form
         welcome.Controls.Add(new Label
         {
             Text = "MagicConverter-Setup.exe · " + version + " · Windows 64비트\r\n\r\n" + source +
-                   "\r\n\r\n계속하려면 다음을 누르세요.",
             Dock = DockStyle.Fill
         }, 0, 1);
 
@@ -82,6 +82,27 @@ internal sealed class SetupWizard : Form
         AcceptButton = next;
         CancelButton = cancel;
         ShowPage(0);
+    }
+
+    {
+        var result = MessageBox.Show(this,
+            "3. 한글의 비트 수에 맞는 DLL을 전용 폴더에 보관하세요.\n" +
+            "4. 같은 Windows 계정에서 ZIP의 레지스트리 안내를 따라 아래 문자열 값을 등록하세요.\n" +
+            "    값 데이터  DLL의 전체 경로\n" +
+            MessageBoxIcon.Information, MessageBoxDefaultButton.Button2);
+        if (result == DialogResult.Yes)
+    }
+
+    {
+        try
+        {
+            using (Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })) { }
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(this, "주소를 열지 못했습니다.\n\n" + url + "\n\n" + error.Message,
+                            Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private static TableLayoutPanel Page(string title)

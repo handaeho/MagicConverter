@@ -14,7 +14,9 @@
 2. 설치 폴더를 고르고 확인한 뒤 **설치**를 누릅니다.
 3. 앱이 열리면 탐색기에서 파일을 드래그하고 <kbd>Shift</kbd>를 눌러 변환 형식을 선택합니다. <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
 
-[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.30/Uninstall.exe) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.30)
+[2.2.30 설치 안내](https://github.com/handaeho/MagicConverter/blob/v2.2.30/docs/user/PUBLIC_WINDOWS.md) · [제거 EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.30/Uninstall.exe) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.30)
+
+2.2.31은 Python·필수 라이브러리와 FFmpeg·FFprobe·rhwp를 내장한 설치 검증본입니다. [2.2.31 검증본 안내](docs/user/PUBLIC_WINDOWS.md)
 
 <p align="center">
   <img src="assets/readme/demo.gif" alt="JPG를 휠로 끌어 PNG로 변환하는 예" width="100%">

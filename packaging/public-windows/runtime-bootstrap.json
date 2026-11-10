@@ -1,0 +1,13 @@
+{
+  "python_version": "3.14.10",
+  "python": {
+    "filename": "python-3.14.10-embed-amd64.zip",
+    "url": "https://www.python.org/ftp/python/3.14.10/python-3.14.10-embed-amd64.zip",
+    "sha256": "90905e64a840557d8c1bc4f5b74db3d7ee85e3ffb217611cac1c7813acea4159"
+  },
+  "pip": {
+    "filename": "pip-26.3-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/07/25/ee8c38ae72d66b844ce8eb9711ba905dba21ca1a8a0c960057c41cd23337/pip-26.3-py3-none-any.whl",
+    "sha256": "f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13"
+  }
+}

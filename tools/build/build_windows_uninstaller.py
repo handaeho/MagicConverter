@@ -18,6 +18,8 @@ docs/user/UNINSTALL_WINDOWS.md packaging/app.manifest packaging/public-windows/u
 packaging/public-windows/process_arguments.cs packaging/public-windows/install_location.cs
 tools/build/build_windows_uninstaller.py
 tools/build/build_public_windows.py
+tools/build/windows_runtime_bundle.py
+tools/__init__.py tools/dependencies/__init__.py tools/dependencies/fetch_vendor.py
 """.split()
 
 
