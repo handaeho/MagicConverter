@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-labelledby="title desc">
+  <title id="title">MagicConverter</title>
+  <desc id="desc">Offline file conversion for Windows. A cyan document and gold wand on an indigo background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y2="1">
+      <stop stop-color="#101b35"/>
+      <stop offset="1" stop-color="#21355f"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="0" x2="1" y2="1">
+      <stop stop-color="#2b4785"/>
+      <stop offset="1" stop-color="#101e3d"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" x2=".7" y2="1">
+      <stop stop-color="#e9fcff"/>
+      <stop offset="1" stop-color="#72daef"/>
+    </linearGradient>
+    <pattern id="dots" width="30" height="30" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1.5" fill="#adc8ff" opacity=".16"/>
+    </pattern>
+    <clipPath id="banner"><rect x="1" y="1" width="1278" height="398" rx="32"/></clipPath>
+  </defs>
+  <g clip-path="url(#banner)">
+    <path d="M0 0h1280v400H0z" fill="url(#bg)"/>
+    <path d="M706 0h574v400H706z" fill="url(#dots)"/>
+    <g fill="none" stroke="#779de8" opacity=".22">
+      <circle cx="1006" cy="201" r="177"/>
+      <circle cx="1006" cy="201" r="157"/>
+      <path d="M784 201h444M1006 0v400" stroke-dasharray="3 12"/>
+    </g>
+    <path d="M819 47h20m-10-10v20m356 264h20m-10-10v20" stroke="#77dce9" stroke-width="2" opacity=".6"/>
+    <circle cx="1212" cy="110" r="4" fill="#ffd285"/>
+    <circle cx="803" cy="290" r="5" fill="#86e1ee"/>
+    <g transform="translate(868 62) scale(1.08)">
+      <rect x="6" y="6" width="244" height="244" rx="57" fill="url(#tile)"/>
+      <rect x="8" y="8" width="240" height="240" rx="55" fill="none" stroke="#7b9fe9" stroke-opacity=".55" stroke-width="4"/>
+      <path d="M52 75h68v125H52a14 14 0 0 1-14-14V89a14 14 0 0 1 14-14Z" fill="#4e74ba"/>
+      <path d="M70 49h53l40 40v93a13 13 0 0 1-13 13H70a13 13 0 0 1-13-13V62a13 13 0 0 1 13-13Z" fill="url(#paper)"/>
+      <path d="M123 49v28a12 12 0 0 0 12 12h28Z" fill="#299fbd"/>
+      <path d="M81 111h48m-48 26h32" fill="none" stroke="#24748f" stroke-width="9" stroke-linecap="round"/>
+      <path d="m115 196 69-69" fill="none" stroke="#142853" stroke-width="25" stroke-linecap="round"/>
+      <path d="m115 196 69-69" fill="none" stroke="#ffc85b" stroke-width="15" stroke-linecap="round"/>
+      <path d="m170 141 14-14" fill="none" stroke="#fff1bf" stroke-width="15" stroke-linecap="round"/>
+      <path d="M201 51l8 18 18 8-18 8-8 18-8-18-18-8 18-8Z" fill="#ffda83"/>
+      <path d="M204 167l5 10 10 5-10 5-5 10-5-10-10-5 10-5Z" fill="#8de9fa"/>
+    </g>
+    <g font-family="Segoe UI, Arial, sans-serif">
+      <path d="M78 102h30" stroke="#86e1ee" stroke-width="3" stroke-linecap="round"/>
+      <text x="123" y="108" fill="#a6e8f0" font-size="19" font-weight="600" letter-spacing="2.8">WINDOWS FILE CONVERTER</text>
+      <text x="72" y="198" fill="#f4f9ff" font-size="76" font-weight="700" letter-spacing="-2">MagicConverter</text>
+      <text x="78" y="249" fill="#b8c9eb" font-size="30">File conversion at your cursor.</text>
+      <g font-size="18" font-weight="600">
+        <rect x="78" y="286" width="157" height="42" rx="12" fill="#243c65" stroke="#486b9e"/>
+        <text x="96" y="313" fill="#e2ecff">Windows 10/11</text>
+        <rect x="248" y="286" width="101" height="42" rx="12" fill="#1c3c56" stroke="#3e7284"/>
+        <text x="267" y="313" fill="#b2eef5">Offline</text>
+        <rect x="362" y="286" width="136" height="42" rx="12" fill="#393550" stroke="#686081"/>
+        <text x="381" y="313" fill="#ffe2a6">AGPL-3.0+</text>
+      </g>
+    </g>
+  </g>
+  <rect x="1.5" y="1.5" width="1277" height="397" rx="31" fill="none" stroke="#647fb9" stroke-opacity=".52" stroke-width="3"/>
+</svg>
