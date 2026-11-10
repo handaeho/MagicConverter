@@ -14,7 +14,19 @@ MagicConverter 2.2.29 설치형은 Windows 10·11 64비트용입니다. 설치 E
 & "$env:LOCALAPPDATA\Programs\MagicConverter\2.2.29\magic_converter-cli.exe" --help
 ```
 
-설치 오류는 `%LOCALAPPDATA%\Programs\MagicConverter\setup-2.2.29.log`에서 확인할 수 있습니다. 앱을 제거하려면 먼저 앱을 종료하고 2.2.29 설치 폴더와 시작 메뉴의 MagicConverter 바로가기를 삭제하세요.
+설치 오류는 `%LOCALAPPDATA%\Programs\MagicConverter\setup-2.2.29.log`에서 확인할 수 있습니다. 설치 파일과 앱 데이터를 제거하는 방법은 [Windows 제거 안내](UNINSTALL_WINDOWS.md)를 참고하세요.
+
+## 설치 위치 선택 검증본
+
+저장소의 `master` 소스 폴더에서 아래 명령을 실행하면 경로 선택을 포함한 설치 EXE를 빌드할 수 있습니다.
+
+```powershell
+py -3.14 tools/build/build_public_windows.py --output dist/public-windows
+```
+
+경로 선택이 추가된 로컬 설치 검증본에서는 **설치 안내 → 라이선스 동의 → 설치 폴더 선택 → 최종 확인 → 설치** 순서로 진행합니다. 기본 경로는 `%LOCALAPPDATA%\Programs\MagicConverter\2.2.29`입니다. 다른 로컬 디스크의 새 폴더나 비어 있는 전용 폴더도 선택할 수 있습니다.
+
+설치 후에는 시작 메뉴에서 같은 위치의 앱이 열립니다. 설치 프로그램을 다시 실행하면 등록된 앱을 엽니다. 폴더를 바꾸려면 제거한 뒤 다시 설치하세요. 제거 도구는 선택한 경로와 해당 폴더의 설치 표식을 대조합니다.
 
 기존 2.2.28은 `.runtime`을 수동으로 준비하는 실행형입니다. [실행형 2.2.28과 설치 안내](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.28)
 

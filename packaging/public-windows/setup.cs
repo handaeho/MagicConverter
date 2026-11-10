@@ -39,25 +39,29 @@ internal static class Setup
         var besideSetup = AppDomain.CurrentDomain.BaseDirectory;
         if (args.Length == 1 && args[0] == "--prepare-offline")
             return PrepareOfflineDialog(besideSetup);
-        var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                                "Programs", "MagicConverter");
-        var destination = Path.Combine(root, Version);
+        var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (String.IsNullOrEmpty(local))
+            return 1;
+        var root = InstallLocation.Root(local);
         try
         {
-            if (!Ready(destination))
+            var saved = InstallLocation.Read(root, Version);
+            var destination = FindExisting(root, saved);
+            if (destination == null)
             {
                 var bundle = Path.Combine(besideSetup, OfflineFolder);
                 var offline = Directory.Exists(bundle) ? bundle : null;
                 var source = offline == null
                     ? "Python.org와 PyPI에서 앱 전용 Python 3.14.10과 필수 라이브러리를 받습니다. 첫 설치에는 인터넷 연결이 필요합니다."
                     : "설치 EXE 옆의 오프라인 자료를 사용합니다. 인터넷 연결 없이 파일 해시를 확인하고 설치합니다.";
-                var consent = MessageBox.Show(
-                    "현재 Windows 계정에 MagicConverter를 설치할까요?\n\n" +
-                    source + "\n\n설치 폴더\n" + destination,
-                    Title, MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
-                if (consent != DialogResult.Yes)
-                    return 2;
-                ShowProgress(stage => Install(root, offline, stage));
+                using (var wizard = new SetupWizard(root, Version, saved == null ? Path.Combine(root, Version) : saved.Folder,
+                                                    source, ReadLicense()))
+                {
+                    if (wizard.ShowDialog() != DialogResult.OK)
+                        return 2;
+                    destination = wizard.Destination;
+                }
+                ShowProgress(stage => InstallAt(root, destination, offline, stage));
             }
             try
             {
@@ -76,6 +80,14 @@ internal static class Setup
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
+    }
+
+    private static string ReadLicense()
+    {
+        using (var payload = Assembly.GetExecutingAssembly().GetManifestResourceStream("magic-converter-setup.zip"))
+        using (var archive = new ZipArchive(payload, ZipArchiveMode.Read))
+        using (var reader = new StreamReader(archive.GetEntry("app/LICENSE").Open(), Encoding.UTF8))
+            return reader.ReadToEnd();
     }
 
     private static int PrepareOfflineDialog(string folder)
@@ -138,22 +150,44 @@ internal static class Setup
                File.Exists(Path.Combine(folder, "runtime", "python314._pth"));
     }
 
-    internal static string Install(string root, string offline, Action<string> report)
+    private static string FindExisting(string root, InstallLocation saved)
     {
-        var destination = Path.Combine(root, Version);
+        var folder = saved == null ? Path.Combine(root, Version) : saved.Folder;
+        InstallLocation.RequirePlainPath(folder);
+        if (Ready(folder) && (saved == null ? InstallLocation.HasMarker(folder, Version) : saved.Matches(Version)))
+            return folder;
+        if (saved != null && (File.Exists(folder) || Directory.Exists(folder) && Directory.GetFileSystemEntries(folder).Length != 0))
+            throw new IOException("기록된 설치 폴더를 확인할 수 없습니다.\n" + folder);
+        return null;
+    }
+
+    internal static string InstallAt(string root, string destination, string offline, Action<string> report)
+    {
+        AppContext.SetSwitch("Switch.System.IO.UseLegacyPathHandling", false);
+        AppContext.SetSwitch("Switch.System.IO.BlockLongPaths", false);
+        destination = InstallLocation.ValidatePath(destination, root, Version);
+        var lockPath = Path.Combine(root, ".setup.lock");
+        InstallLocation.RequirePlainPath(lockPath);
         Directory.CreateDirectory(root);
-        using (var installLock = new FileStream(Path.Combine(root, ".setup.lock"), FileMode.OpenOrCreate,
+        using (var installLock = new FileStream(lockPath, FileMode.OpenOrCreate,
                                                 FileAccess.ReadWrite, FileShare.None))
         {
-            if (Ready(destination))
-                return destination;
-            if (Directory.Exists(destination))
-                throw new IOException("이 버전의 설치 폴더가 불완전합니다. 앱을 종료한 뒤 아래 폴더를 옮기고 설치를 다시 실행하세요.\n" + destination);
-
-            var staging = Directory.CreateDirectory(Path.Combine(root, ".setup-" + Guid.NewGuid().ToString("N"))).FullName;
+            var previous = InstallLocation.Read(root, Version);
+            var existing = FindExisting(root, previous);
+            if (existing != null)
+            {
+                if (!InstallLocation.Same(existing, destination))
+                    throw new IOException("이 버전이 이미 다른 폴더에 설치되어 있습니다.\n" + existing);
+                return existing;
+            }
+            destination = InstallLocation.ValidateEmptyFolder(destination, root, Version);
             var log = LogPath(root);
+            InstallLocation.RequirePlainPath(log);
+            var staging = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(destination),
+                ".mc-" + Guid.NewGuid().ToString("N").Substring(0, 12))).FullName;
             var runtime = Path.Combine(staging, "runtime");
             string scratch = null;
+            string python = null;
             try
             {
                 File.WriteAllText(log, Title + "\r\n", Encoding.UTF8);
@@ -167,7 +201,7 @@ internal static class Setup
                 var temp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp");
                 scratch = Directory.CreateDirectory(Path.Combine(temp, "mc-" + Guid.NewGuid().ToString("N").Substring(0, 12))).FullName;
                 var shortRuntime = Path.Combine(scratch, "runtime");
-                var python = UnpackPython(staging, shortRuntime);
+                python = UnpackPython(staging, shortRuntime);
                 File.Delete(Path.Combine(staging, PythonZip));
                 var pipWheel = Path.Combine(staging, PipWheel);
                 var site = Path.Combine(shortRuntime, "Lib", "site-packages");
@@ -175,13 +209,29 @@ internal static class Setup
                 InstallWheels(python, pipWheel, Path.Combine(staging, RuntimeLock), site, offline, log, scratch);
                 report("설치된 런타임 검사 중");
                 RunPython(python, log, scratch, "-c", PipEntry, pipWheel, "--isolated", "--disable-pip-version-check", "check");
-                Directory.Move(shortRuntime, runtime);
+                report("선택한 설치 폴더에 런타임 복사 중");
+                RunPython(python, log, scratch, "-c", "import shutil, sys; shutil.copytree(*sys.argv[1:])",
+                          @"\\?\" + shortRuntime, @"\\?\" + runtime);
                 RunPython(Path.Combine(runtime, "python.exe"), log, scratch, "-c",
                     "import sys, struct; assert sys.version_info[:3] == (3, 14, 10) and struct.calcsize('P') == 8; " +
                     "import PySide6.QtWidgets, pymupdf, PIL.Image, pythoncom, magic_converter; print(magic_converter.__version__)");
                 File.Delete(pipWheel);
+                var receipt = new InstallLocation(destination, Guid.NewGuid().ToString("N"));
                 File.WriteAllText(Path.Combine(staging, ".installed"), Version, Encoding.ASCII);
-                Directory.Move(staging, destination);
+                File.WriteAllText(Path.Combine(staging, InstallLocation.TokenFile), receipt.Token, Encoding.ASCII);
+                InstallLocation.ValidateEmptyFolder(destination, root, Version);
+                InstallLocation.Save(root, Version, receipt);
+                try
+                {
+                    if (Directory.Exists(destination))
+                        Directory.Delete(destination);
+                    Directory.Move(staging, destination);
+                }
+                catch
+                {
+                    InstallLocation.Save(root, Version, previous);
+                    throw;
+                }
                 return destination;
             }
             catch (Exception error)
@@ -191,8 +241,9 @@ internal static class Setup
             }
             finally
             {
-                if (scratch != null && Directory.Exists(runtime))
-                    Directory.Move(runtime, Path.Combine(scratch, "runtime"));
+                if (python != null && Directory.Exists(runtime))
+                    RunPython(python, log, scratch, "-c", "import shutil, sys; shutil.rmtree(sys.argv[1])",
+                              @"\\?\" + runtime);
                 if (Directory.Exists(staging))
                     Directory.Delete(staging, true);
                 if (scratch != null)

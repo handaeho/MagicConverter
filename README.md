@@ -48,6 +48,8 @@
 - **2.2.28 실행형** · Python과 런타임을 직접 준비해 실행하는 버전입니다. [2.2.28 다운로드](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.28)
 
 
+현재 `master` 소스에는 설치 위치 선택 마법사와 제거 도구가 있습니다. [소스 빌드와 설치 안내](docs/user/PUBLIC_WINDOWS.md#설치-위치-선택-검증본) · [제거 도구 빌드 안내](docs/user/UNINSTALL_WINDOWS.md)
+
 ## 소스로 시작하기
 
 Windows 10 또는 11에 **64비트 Python 3.14**를 설치한 뒤, 저장소 폴더에서 PowerShell을 엽니다.

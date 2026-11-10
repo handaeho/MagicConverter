@@ -29,9 +29,10 @@ magic_converter/data/hwpx/LICENSE magic_converter/data/hwpx/NOTICE
 magic_converter/data/hwpx/SOURCE.txt magic_converter/data/hwpx/Skeleton.hwpx
 """.split()
 SOURCE_INPUTS = """
-assets/README.md assets/magic_converter-tool.svg docs/user/PUBLIC_WINDOWS.md
+assets/README.md assets/magic_converter-tool.svg docs/user/PUBLIC_WINDOWS.md docs/user/UNINSTALL_WINDOWS.md
 packaging/app.manifest packaging/public-windows/launcher.cs requirements/windows-py314.lock
 packaging/public-windows/setup.cs packaging/public-windows/process_arguments.cs
+packaging/public-windows/install_location.cs packaging/public-windows/setup_wizard.cs
 tests/documents/test_hwp_objects.py tools/build/generate_icon.py
 tools/build/build_public_windows.py
 """.split()
@@ -143,6 +144,8 @@ def build(output):
             "/reference:System.IO.Compression.dll", "/reference:System.IO.Compression.FileSystem.dll",
             "/reference:System.Drawing.dll", "/reference:System.Net.Http.dll", "/reference:Microsoft.CSharp.dll",
             "/resource:setup.zip,magic-converter-setup.zip",
+            str(ROOT / "packaging/public-windows/install_location.cs"),
+            str(ROOT / "packaging/public-windows/setup_wizard.cs"),
         )
         if setup.read_bytes().count(payload) != 1:
             raise ValueError("Setup does not contain the exact generated application archive")
