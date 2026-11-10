@@ -5,6 +5,7 @@ the Python implementation and its narrower preservation contract are local.
 """
 
 DATA = ("json", "jsonl", "yaml", "toml", "xml", "csv", "tsv")
+ARRAY_DATA = {"jsonl", "csv", "tsv"}
 FONTS = ("ttf", "otf", "woff", "woff2")
 BOOKS = ("epub", "fb2")
 MESHES = ("obj", "stl", "ply")
@@ -33,8 +34,13 @@ def routes():
     ):
         for source in formats:
             for target in formats:
-                if source != target:
-                    yield family, source, target, f"{family}:{target}"
+                if source == target:
+                    continue
+                # These formats have disjoint root types. The converter
+                # preserves the root rather than adding or unwrapping a key.
+                if (source == "toml" and target in ARRAY_DATA) or (target == "toml" and source in ARRAY_DATA):
+                    continue
+                yield family, source, target, f"{family}:{target}"
     for source in (*BOOKS, "txt", "md", "docx"):
         for target in (*BOOKS, "html", "txt", "md", "docx"):
             if source not in BOOKS and target not in BOOKS:

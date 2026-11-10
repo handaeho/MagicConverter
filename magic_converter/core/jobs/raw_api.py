@@ -181,7 +181,8 @@ def run_request(request, destination, notice):
         # SVG text needs Qt's font database in a fresh headless raw worker,
         # just as it does in the registered library worker.
         from PySide6.QtGui import QGuiApplication
-        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from magic_converter.core.platform.headless_qt import configure_headless_qt
+        configure_headless_qt()
         app = QGuiApplication.instance() or QGuiApplication([])
     result = function(**values)
     if not file_result:

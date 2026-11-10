@@ -7,6 +7,7 @@ import json
 import os
 import plistlib
 import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -65,6 +66,40 @@ class ExtendedFormatTests(unittest.TestCase):
             writer.write(output)
             writer.close()
         return output
+
+    @unittest.skipUnless(os.name == "nt", "Windows offscreen font discovery")
+    def test_cli_plain_text_pdf_embeds_readable_windows_fonts(self):
+        import pymupdf
+
+        expected = "한글 ABC 123 <literal> & 日本語\n    keep four leading spaces"
+        inputs = []
+        for encoding in ("utf-8", "utf-8-sig", "utf-16", "cp949"):
+            source = self.root / f"{encoding}.txt"
+            source.write_bytes(expected.replace("\n", "\r\n").encode(encoding))
+            inputs.append(str(source))
+        env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+        env.pop("QT_QPA_FONTDIR", None)
+        base = [sys.executable, "-m", "magic_converter", "convert", *inputs,
+                "--action", "document:pdf", "--data-dir", str(self.root / "profile")]
+        outputs = self.root / "converted"
+        result = subprocess.run([*base, "--output", str(outputs)], env=env,
+                                capture_output=True, encoding="utf-8", errors="replace", timeout=45)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        pdfs = list(outputs.glob("*.pdf"))
+        self.assertEqual(len(pdfs), len(inputs))
+        for pdf in pdfs:
+            with pymupdf.open(pdf) as document:
+                self.assertIn(expected, document[0].get_text())
+
+        empty_fonts = self.root / "no-fonts"
+        empty_fonts.mkdir()
+        env["QT_QPA_FONTDIR"] = str(empty_fonts)
+        rejected = self.root / "rejected"
+        result = subprocess.run([*base, "--output", str(rejected)], env=env,
+                                capture_output=True, encoding="utf-8", errors="replace", timeout=45)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("PDF에 사용할 글꼴을 찾지 못했습니다", result.stdout)
+        self.assertFalse(list(rejected.glob("*")))
 
     def test_all_format_families_route_and_engine_requirements_are_visible(self):
         for name in ("photo.heic", "photo.avif", "picture.svg", "sound.flac", "sound.opus", "video.wmv",

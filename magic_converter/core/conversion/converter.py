@@ -524,27 +524,25 @@ def convert_image(source: Path, destination: Path, suffix: str, *, compress: boo
 def media_command(ffmpeg: str, source: Path, destination: Path, key: str) -> list[str]:
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                "-nostats", "-stats_period", "0.2", "-progress", "pipe:1"]
-    audio_only = source.suffix.lower() in AUDIO_EXTENSIONS
-    if audio_only and key in {"media:mp4", "media:webm"}:
+    video_output = key in {"media:mp4", "media:mov", "media:mkv", "media:webm", "media:avi", "media:wmv"}
+    if video_output and source.suffix.lower() in AUDIO_EXTENSIONS:
         command += ["-f", "lavfi", "-i", "color=c=0x1e1e23:s=640x360:r=24", "-i", str(source)]
         command += ["-map", "0:v:0", "-map", "1:a:0", "-shortest"]
     else:
         command += ["-i", str(source)]
-    if key in {"media:mp4", "media:mov", "media:mkv"}:
-        if not audio_only:
+        if video_output:
             command += ["-map", "0:v:0", "-map", "0:a:0?"]
+    if key in {"media:mp4", "media:mov", "media:mkv"}:
         command += ["-vf", "scale=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264", "-preset", "medium",
                     "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
                     ]
         if key != "media:mkv":
             command += ["-movflags", "+faststart"]
     elif key in {"media:avi", "media:wmv"}:
-        command += ["-map", "0:v:0", "-map", "0:a:0?", "-vf", "scale=ceil(iw/2)*2:ceil(ih/2)*2",
+        command += ["-vf", "scale=ceil(iw/2)*2:ceil(ih/2)*2",
                     "-c:v", "mpeg4" if key.endswith("avi") else "wmv2", "-q:v", "4", "-pix_fmt", "yuv420p",
                     "-c:a", "libmp3lame" if key.endswith("avi") else "wmav2", "-b:a", "128k"]
     elif key == "media:webm":
-        if not audio_only:
-            command += ["-map", "0:v:0", "-map", "0:a:0?"]
         command += ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-pix_fmt", "yuv420p",
                     "-c:a", "libopus", "-b:a", "128k"]
     elif key == "media:mp3":

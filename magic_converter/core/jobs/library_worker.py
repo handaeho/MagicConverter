@@ -1,7 +1,6 @@
 """Owned worker boundary for local PDF/document/image library routes."""
 
 from dataclasses import asdict
-import os
 from pathlib import Path
 
 from magic_converter.core.jobs.job_control import check_cancelled, copy_file, copy_tree
@@ -44,9 +43,8 @@ def run_request(request, destination, progress, notice, office_event):
         progress(100)
     else:
         from PySide6.QtGui import QGuiApplication
-        # Layout routes retain the headless Qt font database for their
-        # complete lifetime; only plain addressed text skips initialization.
-        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from magic_converter.core.platform.headless_qt import configure_headless_qt
+        configure_headless_qt()
         app = QGuiApplication.instance() or QGuiApplication([])
         from magic_converter.core.jobs.office_broker import client
         with client(destination.parent, request["run_id"], office_event):

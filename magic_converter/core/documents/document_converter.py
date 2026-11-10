@@ -174,7 +174,9 @@ def write_epub(text: str, destination: Path, title: str) -> None:
 def html_to_pdf(content: str, destination: Path, landscape: bool = False) -> None:
     check_cancelled()
     from PySide6.QtCore import QMarginsF
-    from PySide6.QtGui import QPageLayout, QPageSize, QPdfWriter, QTextDocument
+    from PySide6.QtGui import QFontDatabase, QPageLayout, QPageSize, QPdfWriter, QTextDocument
+    if not QFontDatabase.families():
+        raise ConversionError("PDF에 사용할 글꼴을 찾지 못했습니다. 시스템 글꼴을 확인하세요.")
     writer = QPdfWriter(str(destination))
     writer.setResolution(300)
     writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
@@ -203,6 +205,13 @@ def convert_text_document(source: Path, destination: Path, suffix: str, progress
     elif suffix == ".html":
         destination.write_text(content, encoding="utf-8")
     elif suffix == ".pdf":
+        if source.suffix.lower() == ".txt":
+            # Keep command/code indentation and still wrap long lines.
+            text = text.replace("\r\n", "\n").replace("\r", "\n")
+            content = (
+                '<pre style="white-space:pre-wrap; font-family:\'Malgun Gothic\'; font-size:10pt;">'
+                + html.escape(text) + "</pre>"
+            )
         html_to_pdf(content, destination)
     elif suffix == ".epub":
         write_epub(text, destination, source.stem)

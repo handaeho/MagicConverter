@@ -14,7 +14,7 @@ using Microsoft.Win32;
 
 internal static class Uninstaller
 {
-    internal const string Version = "2.2.29";
+    internal static readonly string Version = Assembly.GetExecutingAssembly().GetName().Version.ToString(3);
     private const string Title = "MagicConverter 제거";
     private const string ExplorerKey = @"Software\Classes\*\shell\MagicConverter";
     private static readonly Regex ProfileFile = new Regex(
@@ -42,7 +42,7 @@ internal static class Uninstaller
         {
             var folder = InstalledFolder(local);
             var accepted = MessageBox.Show(
-                "현재 Windows 계정의 MagicConverter 2.2.29를 제거할까요?\n\n" +
+                "현재 Windows 계정의 MagicConverter " + Version + "를 제거할까요?\n\n" +
                 "설치 위치\n" + folder + "\n\n" +
                 "설치 파일, 앱 전용 Python, 기본 설정, 변환 기록, 감시 설정과 로그를 지웁니다.\n" +
                 "원본 문서, 변환 결과와 별도 설치한 도구는 보존합니다.\n\n" +
@@ -112,7 +112,7 @@ internal static class Uninstaller
             if (saved != null && Directory.Exists(installed) && !saved.Matches(Version))
                 throw new IOException("지정한 위치의 설치 표식을 확인할 수 없습니다.\n" + installed);
             if (File.Exists(marker) && (new FileInfo(marker).Length > 32 || File.ReadAllText(marker).Trim() != Version))
-                throw new IOException("2.2.29 설치 표식을 확인할 수 없습니다.\n" + installed);
+                throw new IOException(Version + " 설치 표식을 확인할 수 없습니다.\n" + installed);
             if (OwnedProcessRunning(installed) || LockOwnerRunning(Path.Combine(profile, "magic_converter.lock"))
                                                || LockOwnerRunning(Path.Combine(profile, "watch.lock")))
                 throw new IOException("MagicConverter 또는 폴더 감시가 실행 중입니다. 종료한 뒤 다시 실행하세요.");

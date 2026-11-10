@@ -55,6 +55,15 @@ class SpecialFormatTests(unittest.TestCase):
         self.catalog = create_catalog()
         self.notices = []
 
+    def test_data_routes_exclude_incompatible_root_types(self):
+        for suffix, key in (
+            ("csv", "data:toml"), ("tsv", "data:toml"), ("ndjson", "data:toml"),
+            ("toml", "data:jsonl"), ("toml", "data:csv"), ("toml", "data:tsv"),
+        ):
+            with self.subTest(source=suffix, action=key):
+                self.assertIsNone(self.catalog.assess(f"input.{suffix}", key).route)
+        self.assertIsNotNone(self.catalog.assess("input.json", "data:toml").route)
+
     def tearDown(self):
         self.temp.cleanup()
 

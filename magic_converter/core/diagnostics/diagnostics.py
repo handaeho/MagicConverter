@@ -100,8 +100,8 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
         from PIL import Image
         from PySide6.QtCore import QPoint
-        from PySide6.QtGui import QFontDatabase
         from PySide6.QtWidgets import QApplication
+        from magic_converter.core.platform.headless_qt import configure_headless_qt
         from magic_converter.core.conversion.converter import convert_image, convert_media, find_ffmpeg, find_ffprobe, probe_duration, JobProgress
         from magic_converter.ui.shell.radial_wheel import RadialWheelWindow
         from magic_converter.ui.jobs.progress_overlay import ProgressOverlay
@@ -113,14 +113,11 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
         from pypdf import PdfReader, PdfWriter
         from openpyxl import Workbook
 
+        configure_headless_qt()
         app = QApplication.instance() or QApplication(["magic_converter-self-test"])
         if make_icon().isNull():
             raise RuntimeError("Tool icon failed to load")
         report["icon"] = icon_path().name
-        for name in ("segoeui.ttf", "malgun.ttf"):
-            font = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / name
-            if font.is_file():
-                QFontDatabase.addApplicationFont(str(font))
         ffmpeg = find_ffmpeg()
         if ffmpeg is None:
             raise RuntimeError("FFmpeg not found")

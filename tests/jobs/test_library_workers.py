@@ -81,10 +81,15 @@ class LibraryWorkerTests(unittest.TestCase):
         pages = self.convert(text, "document:png")
         self.assertEqual(len(list(pages.glob("*.png"))), 1)
         svg = self.root / "label.svg"
-        svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="30"><text x="1" y="20">Text</text></svg>', encoding="utf-8")
-        with Image.open(self.convert(svg, "image:png")) as image:
-            self.assertEqual(image.size, (100, 30))
-            self.assertIsNotNone(image.getbbox())
+        svg_text = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="30"><text x="1" y="20">{}</text></svg>'
+        rendered = []
+        for label in ("WWWW", "IIII"):
+            svg.write_text(svg_text.format(label), encoding="utf-8")
+            with Image.open(self.convert(svg, "image:png")) as image:
+                self.assertEqual(image.size, (100, 30))
+                self.assertIsNotNone(image.getbbox())
+                rendered.append(image.tobytes())
+        self.assertNotEqual(*rendered)
 
     def test_serialized_encoder_tool_output_options_and_collision(self):
         request = prepare_request([self.png], "image:jpg", create_catalog())

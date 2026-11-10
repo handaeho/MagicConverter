@@ -43,12 +43,12 @@
 
 ## Windows 다운로드
 
-- **2.2.29 설치형** · Windows 10·11 64비트용입니다. 설치 EXE를 실행하고 동의하면 Python과 필수 라이브러리를 설치한 뒤 앱이 열립니다. [설치 EXE 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v2.2.29/MagicConverter-Setup.exe) · [릴리스 전체 보기](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.29)
+- **2.2.30 설치형** · Windows 10·11 64비트용입니다. 라이선스에 동의하고 설치 폴더를 선택하면 앱과 필수 런타임을 설치합니다. [설치 EXE 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v2.2.30/MagicConverter-Setup.exe) · [릴리스 전체 보기](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.30)
 - **인터넷이 없는 PC** · 연결된 PC에서 런타임 자료를 한 번 만들고 설치 EXE와 함께 옮겨 설치할 수 있습니다. [오프라인 설치 안내](docs/user/PUBLIC_WINDOWS.md#인터넷이-없는-pc에-설치하기)
 - **2.2.28 실행형** · Python과 런타임을 직접 준비해 실행하는 버전입니다. [2.2.28 다운로드](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.28)
 
 
-현재 `master` 소스에는 설치 위치 선택 마법사와 제거 도구가 있습니다. [소스 빌드와 설치 안내](docs/user/PUBLIC_WINDOWS.md#설치-위치-선택-검증본) · [제거 도구 빌드 안내](docs/user/UNINSTALL_WINDOWS.md)
+[제거 EXE 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v2.2.30/Uninstall.exe) · [대응 소스 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v2.2.30/MagicConverter-corresponding-source.zip) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md)
 
 ## 소스로 시작하기
 

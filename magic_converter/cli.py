@@ -114,7 +114,8 @@ def run(argv):
         command_parser.error("시간 제한은 유한한 양수로 지정하세요.")
     if args.command in {"watch", "serve"} and args.duration is not None and (not math.isfinite(args.duration) or args.duration <= 0):
         command_parser.error("감시/서버 실행 시간은 유한한 양수로 지정하세요.")
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from magic_converter.core.platform.headless_qt import configure_headless_qt
+    configure_headless_qt()
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication(["magic_converter"])

@@ -1,10 +1,11 @@
-"""Build the standalone removal tool for the Windows 2.2.29 installer."""
+"""Build the standalone removal tool for the Windows installer."""
 
 import argparse
 import gzip
 import os
 from pathlib import Path, PurePosixPath
 import tempfile
+from xml.etree import ElementTree as ET
 
 from build_public_windows import ROOT, compile_exe, files, sha, zip_bytes
 
@@ -33,6 +34,10 @@ def normalize_inventory(path):
 
 
 def build(output, inventory):
+    identity = ET.parse(ROOT / "packaging/app.manifest").getroot().find(
+        "{urn:schemas-microsoft-com:asm.v1}assemblyIdentity"
+    )
+    version = identity.attrib["version"]
     contents = normalize_inventory(inventory)
     source_zip = zip_bytes({**files(SOURCE), INVENTORY: contents})
     output = output.resolve()
@@ -47,8 +52,8 @@ def build(output, inventory):
         (staging / "version.cs").write_text(
             "using System.Reflection;\n"
             '[assembly: AssemblyTitle("MagicConverter Uninstaller")]\n'
-            '[assembly: AssemblyVersion("2.2.29.0")]\n'
-            '[assembly: AssemblyFileVersion("2.2.29.0")]\n',
+            f'[assembly: AssemblyVersion("{version}")]\n'
+            f'[assembly: AssemblyFileVersion("{version}")]\n',
             encoding="ascii",
         )
         (staging / "uninstall-files.gz").write_bytes(gzip.compress(contents, mtime=0))

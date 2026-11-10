@@ -415,9 +415,13 @@ app/magic_converter/core/platform/__init__.py
 app/magic_converter/core/platform/__pycache__/__init__.cpython-314.opt-1.pyc
 app/magic_converter/core/platform/__pycache__/__init__.cpython-314.opt-2.pyc
 app/magic_converter/core/platform/__pycache__/__init__.cpython-314.pyc
+app/magic_converter/core/platform/__pycache__/headless_qt.cpython-314.opt-1.pyc
+app/magic_converter/core/platform/__pycache__/headless_qt.cpython-314.opt-2.pyc
+app/magic_converter/core/platform/__pycache__/headless_qt.cpython-314.pyc
 app/magic_converter/core/platform/__pycache__/hook_manager.cpython-314.opt-1.pyc
 app/magic_converter/core/platform/__pycache__/hook_manager.cpython-314.opt-2.pyc
 app/magic_converter/core/platform/__pycache__/hook_manager.cpython-314.pyc
+app/magic_converter/core/platform/headless_qt.py
 app/magic_converter/core/platform/hook_manager.py
 app/magic_converter/core/settings/__init__.py
 app/magic_converter/core/settings/__pycache__/__init__.cpython-314.opt-1.pyc

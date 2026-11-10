@@ -1,7 +1,6 @@
 """Owned encoding for combined PDF/ZIP requests; only the parent publishes."""
 
 from pathlib import Path
-import os
 from contextvars import ContextVar
 from contextlib import contextmanager
 from threading import Event
@@ -32,9 +31,10 @@ def run_request(request, destination, progress):
     from magic_converter.core.conversion.conversion_request import ConversionRequest, PlannedFile
     from magic_converter.core.conversion.conversion_catalog import Route
     from magic_converter.core.conversion.file_router import ALL_ACTIONS
+    from magic_converter.core.platform.headless_qt import configure_headless_qt
     from magic_converter.core.settings.preferences import OutputRule
 
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    configure_headless_qt()
     app = QGuiApplication.instance() or QGuiApplication([])
     key = request["action_key"]
     if key not in {"zip", "tool:pdf_merge"}:

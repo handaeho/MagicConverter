@@ -447,11 +447,18 @@ class FFmpegTests(unittest.TestCase):
                 if key == "strip":
                     self.assertNotIn(b"PRIVATE_TITLE", output.read_bytes())
         self.assertEqual(hashlib.sha256(self.source.read_bytes()).hexdigest(), original)
-        for key, suffix in (("media:mp4", ".mp4"), ("media:webm", ".webm"), ("media:mp3", ".mp3")):
-            with self.subTest(audio=key):
-                output = self.root / ("audio_" + key.replace(":", "_") + suffix)
-                convert_media(self.audio, output, key, self.ffmpeg)
-                self.assertGreater(output.stat().st_size, 0)
+        audio_output = self.root / "audio_only.mp3"
+        convert_media(self.audio, audio_output, "media:mp3", self.ffmpeg)
+        self.assertGreater(audio_output.stat().st_size, 0)
+
+    def test_audio_to_video_keeps_audio_and_adds_a_still_frame(self):
+        from magic_converter.core.media.media_tools import probe_media
+        for suffix in ("mp4", "mov", "mkv", "webm", "avi", "wmv"):
+            with self.subTest(target=suffix):
+                output = self.root / f"audio_video.{suffix}"
+                convert_media(self.audio, output, f"media:{suffix}", self.ffmpeg)
+                streams = probe_media(output, self.ffmpeg)["streams"]
+                self.assertEqual({stream["codec_type"] for stream in streams}, {"video", "audio"})
 
     def test_actual_progress_uses_duration_and_completes_after_success(self):
         paced_source = self.root / "paced-source.mp4"

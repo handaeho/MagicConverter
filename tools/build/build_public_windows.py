@@ -33,8 +33,9 @@ assets/README.md assets/magic_converter-tool.svg docs/user/PUBLIC_WINDOWS.md doc
 packaging/app.manifest packaging/public-windows/launcher.cs requirements/windows-py314.lock
 packaging/public-windows/setup.cs packaging/public-windows/process_arguments.cs
 packaging/public-windows/install_location.cs packaging/public-windows/setup_wizard.cs
+packaging/public-windows/uninstall.cs packaging/public-windows/uninstall-files.txt
 tests/documents/test_hwp_objects.py tools/build/generate_icon.py
-tools/build/build_public_windows.py
+tools/build/build_public_windows.py tools/build/build_windows_uninstaller.py
 """.split()
 
 
