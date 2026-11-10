@@ -1,0 +1,51 @@
+[
+  {
+    "package": "fonttools",
+    "version": "4.67.0",
+    "file": "fonttools-LICENSE.txt",
+    "sha256": "22bef80697ecfaa17f97e62b9a26dfa12820be05583e8dd12ad169b241274c99",
+    "upstream_installed_path": "fonttools-4.67.0.dist-info/licenses/LICENSE"
+  },
+  {
+    "package": "fonttools",
+    "version": "4.67.0",
+    "file": "fonttools-LICENSE.external.txt",
+    "sha256": "b082a5f86775b2641f01bccb8b9c82908481de5f502bb254b1e13bfc2a9f303d",
+    "upstream_installed_path": "fonttools-4.67.0.dist-info/licenses/LICENSE.external"
+  },
+  {
+    "package": "Brotli",
+    "version": "1.2.0",
+    "file": "Brotli-LICENSE.txt",
+    "sha256": "60ae0f13e76cc2eaaa108677eefa4ce16b647f6bbe8cf0a1ac9429d82eca7248",
+    "upstream_installed_path": "brotli-1.2.0.dist-info/licenses/LICENSE"
+  },
+  {
+    "package": "zopfli",
+    "version": "0.4.3",
+    "file": "zopfli-COPYING.txt",
+    "sha256": "675fc1c25ad23d5e14255152262598b591a6e3fc65f0871655f5f6585f120acd",
+    "upstream_installed_path": "zopfli-0.4.3.dist-info/licenses/COPYING"
+  },
+  {
+    "package": "PyYAML",
+    "version": "6.0.3",
+    "file": "PyYAML-LICENSE.txt",
+    "sha256": "8d3928f9dc4490fd635707cb88eb26bd764102a7282954307d3e5167a577e8a4",
+    "upstream_installed_path": "pyyaml-6.0.3.dist-info/licenses/LICENSE"
+  },
+  {
+    "package": "tomli-w",
+    "version": "1.2.0",
+    "file": "tomli-w-LICENSE.txt",
+    "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe",
+    "upstream_installed_path": "tomli_w-1.2.0.dist-info/LICENSE"
+  },
+  {
+    "package": "defusedxml",
+    "version": "0.7.1",
+    "file": "defusedxml-LICENSE.txt",
+    "sha256": "b80ce9da8c42a1f91079627fbbe2bf27210ae108a0ffe5f077d5b08e076c24c8",
+    "upstream_installed_path": "defusedxml-0.7.1.dist-info/LICENSE"
+  }
+]

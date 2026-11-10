@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "distribution_mode": "open-source-preparation",
+  "distribution_target": "Public source release, selected by the project owner on 2026-10-22",
+  "public_windows_executables": false,
+  "project_license": "AGPL-3.0-or-later",
+  "public_release_approved": false,
+  "project_license_file": "LICENSE",
+  "project_license_sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+  "obligations_reviewed": false,
+  "corresponding_source_package": null,
+  "corresponding_source_sha256": null,
+  "corresponding_source_manifest": null,
+  "corresponding_source_manifest_sha256": null,
+  "review_required": [
+    "Exact public Git source tree, included notices, and publication approval",
+    "PyMuPDF/MuPDF AGPL or commercial selection and evidence",
+    "Qt module-specific notices, relinking/rebuild and source terms",
+    "FFmpeg full build and external codec corresponding-source materials",
+    "rhwp embedded dependencies and Microsoft runtime redistribution terms"
+  ]
+}

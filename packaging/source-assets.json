@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "assets": [
+    {
+      "name": "python-hwpx blank template",
+      "version": "128b0da1bcfdf8c2302c23f22a26942eff61f5d7",
+      "source_url": "https://github.com/airmang/python-hwpx/tree/128b0da1bcfdf8c2302c23f22a26942eff61f5d7",
+      "license": "Apache-2.0",
+      "license_status": "Only the blank template is bundled, with original LICENSE and NOTICE.",
+      "files": [
+        {
+          "file": "magic_converter/data/hwpx/LICENSE",
+          "sha256": "fee6f3e30bfe064913de5de0bbe42e1fb2467958ee458199a192bde5e36c0875",
+          "bytes": 9688
+        },
+        {
+          "file": "magic_converter/data/hwpx/NOTICE",
+          "sha256": "85edcf04b5e72192b4b0db28cdcf92010da3bd68d5eb5828ca559467c1cf8b7b",
+          "bytes": 3837
+        },
+        {
+          "file": "magic_converter/data/hwpx/Skeleton.hwpx",
+          "sha256": "c91fb77a9933a3e5645a25778e2d2b99e98137ed99572a5d1dd29ef0c0fd4c98",
+          "bytes": 7490
+        },
+        {
+          "file": "magic_converter/data/hwpx/SOURCE.txt",
+          "sha256": "a95de654d2b0d16b42808f18fbe2782ba44d9578a6e3957b5a6dfb8061352c1b",
+          "bytes": 198
+        }
+      ]
+    },
+    {
+      "name": "Filee design/source references",
+      "version": "b249fec88463ad283750038ae3c317fa11ad50cb",
+      "source_url": "https://github.com/KnifeLemon/Filee/tree/b249fec88463ad283750038ae3c317fa11ad50cb",
+      "license": "MIT",
+      "license_status": "Source/design references and attribution, not a runtime engine. Later comparison snapshots are documented in audit reports.",
+      "files": [
+        {
+          "file": "licenses/Filee-MIT.txt",
+          "sha256": "34209d059d78056e9a68c861aebee328c0651c909467479c49b3e2dd1bd9cece",
+          "bytes": 1105
+        }
+      ]
+    }
+  ]
+}

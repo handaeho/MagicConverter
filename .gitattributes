@@ -1,0 +1,14 @@
+# Third-party license hashes cover the original wheel bytes, including EOLs.
+/licenses/stage7/*.txt -text whitespace=cr-at-eol
+/licenses/runtime/** -text whitespace=cr-at-eol
+/vendor/ffmpeg/LICENSE -text whitespace=cr-at-eol
+/vendor/ffmpeg/README.txt -text whitespace=cr-at-eol
+/vendor/rhwp/LICENSE -text whitespace=cr-at-eol
+/vendor/rhwp/THIRD_PARTY_LICENSES.md -text whitespace=cr-at-eol
+/vendor/rhwp/runtime-licenses/** -text whitespace=cr-at-eol
+/vendor/hancom/** -text whitespace=cr-at-eol
+/magic_converter/data/hwpx/** -text whitespace=cr-at-eol
+/licenses/Filee-MIT.txt -text whitespace=cr-at-eol
+/packaging/schemas/** -text whitespace=cr-at-eol
+# Keep the GNU license text byte-for-byte as obtained from GNU.
+/LICENSE -text

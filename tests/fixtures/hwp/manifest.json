@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "purpose": "Synthetic offline structural regressions, not native visual fidelity certification",
+  "fixtures": [
+    {
+      "path": "magic_converter/data/hwp/table_picture.hwp",
+      "sha256": "f8a661b996cc6aa64f748a3c744c005bfc3ae36e9e22d6834a965aa5b97d2e86",
+      "bytes": 14336,
+      "expected_counts": {
+        "tables": 1,
+        "pictures": 1
+      },
+      "provenance": "Project-generated synthetic input; no user document data"
+    },
+    {
+      "path": "tests/fixtures/hwp/table-picture-spacing.hwpx",
+      "sha256": "f03928ad7487d7d717062b1b65aa3b4cd358d8b234be9976b03e2887330c62db",
+      "bytes": 8523,
+      "expected_counts": {
+        "tables": 1,
+        "pictures": 1
+      },
+      "provenance": "Project-generated synthetic input; no user document data"
+    },
+    {
+      "path": "tests/fixtures/hwp/script-faces.hwpx",
+      "bytes": 7078,
+      "sha256": "77669fa6f4dfcc7caafa3309c318f84272458435c003415d6f28d1b9936bed9e",
+      "expected_counts": {
+        "tables": 0,
+        "pictures": 0
+      },
+      "provenance": "Project-generated mixed-script declarations; no font binaries or user data"
+    }
+  ]
+}

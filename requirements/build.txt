@@ -1,0 +1,10 @@
+-r runtime.txt
+PyInstaller>=6.16,<7
+jsonschema==4.26.0
+# Reviewed stage-7 wheel/license set; refresh licenses/stage7 when updating.
+fonttools[woff]==4.67.0
+Brotli==1.2.0
+zopfli==0.4.3
+PyYAML==6.0.3
+tomli-w==1.2.0
+defusedxml==0.7.1

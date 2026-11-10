@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "platform": "win_amd64",
+  "artifacts": [
+    {
+      "id": "ffmpeg",
+      "version": "9.0.2",
+      "license": "GPL-3.0-or-later",
+      "source_url": "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+      "format": "zip",
+      "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-full_build.zip",
+      "sha256": "759d0a9831c436a0eb331ad36f236c06cb04aaa0005da46571f0e9d3d9206f6b",
+      "bytes": 257736868,
+      "filename": "ffmpeg-9.0.2-full_build.zip",
+      "files": [
+        {
+          "member": "ffmpeg-9.0.2-full_build/bin/ffmpeg.exe",
+          "sha256": "589e50b766d251afdf181dd664d40bd94407e200b019989fd7468c7d118a28d0",
+          "bytes": 227823104,
+          "target": "vendor/ffmpeg/ffmpeg.exe"
+        },
+        {
+          "member": "ffmpeg-9.0.2-full_build/bin/ffprobe.exe",
+          "sha256": "02264dfa4f56baaa31e443ece8aa16d397f6b008200e7fd184d22b9009e75fd3",
+          "bytes": 227621376,
+          "target": "vendor/ffmpeg/ffprobe.exe"
+        },
+        {
+          "member": "ffmpeg-9.0.2-full_build/LICENSE",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "bytes": 35147,
+          "target": "vendor/ffmpeg/LICENSE"
+        },
+        {
+          "member": "ffmpeg-9.0.2-full_build/README.txt",
+          "sha256": "e7db34704804ed8844e837714eebbf843ca0a499555541df9e47fa2cc033dcb1",
+          "bytes": 45523,
+          "target": "vendor/ffmpeg/README.txt"
+        }
+      ]
+    },
+    {
+      "id": "rhwp",
+      "version": "0.8.7",
+      "license": "MIT",
+      "source_url": "https://github.com/edwardkim/rhwp/tree/v0.8.7",
+      "format": "zip",
+      "url": "https://github.com/edwardkim/rhwp/releases/download/v0.8.7/rhwp-v0.8.7-windows-x86_64.zip",
+      "sha256": "f7ac326e98f595ae8fecd8da7a614ee9a37db77bdf938782a8e07c9da473ec6f",
+      "bytes": 19796112,
+      "filename": "rhwp-v0.8.7-windows-x86_64.zip",
+      "files": [
+        {
+          "member": "rhwp/LICENSE",
+          "sha256": "d6ea0e91bf1e6136b606e288e7e22dc44e39b4f087d4bdcde2bd0d8aaf5314dd",
+          "bytes": 1093,
+          "target": "vendor/rhwp/LICENSE"
+        },
+        {
+          "member": "rhwp/rhwp.exe",
+          "sha256": "1e1b7ae6c9ffd895e1a330a191666a2629cc7eba2fc9e37442e9f1755741bb62",
+          "bytes": 49458688,
+          "target": "vendor/rhwp/rhwp.exe"
+        }
+      ]
+    },
+    {
+      "id": "vc-runtime",
+      "version": "14.44.35208",
+      "license": "LicenseRef-Microsoft-Visual-C-Runtime",
+      "source_url": "https://github.com/conda-forge/vc-feedstock",
+      "format": "conda",
+      "url": "https://conda.anaconda.org/conda-forge/win-64/vc14_runtime-14.44.35208-h818238b_41.conda",
+      "sha256": "ec706fe9368b837fbd05af4851f5ebef12bef8c471a273f4805f7af788407317",
+      "bytes": 682908,
+      "filename": "vc14_runtime-14.44.35208-h818238b_41.conda",
+      "files": [
+        {
+          "container": "pkg-vc14_runtime-14.44.35208-h818238b_41.tar.zst",
+          "member": "Library/bin/vcruntime140.dll",
+          "sha256": "0205071c36c17f1efbd70178c852cb7d49985c484202752b8704b7ac6b184e60",
+          "bytes": 124496,
+          "target": "vendor/rhwp/vcruntime140.dll"
+        },
+        {
+          "container": "pkg-vc14_runtime-14.44.35208-h818238b_41.tar.zst",
+          "member": "Library/bin/vcruntime140_1.dll",
+          "sha256": "963e45edd064545962e216c12d68071ced94dc8e11862a18f07f14eb2690a57c",
+          "bytes": 49744,
+          "target": "vendor/rhwp/vcruntime140_1.dll"
+        },
+        {
+          "container": "pkg-vc14_runtime-14.44.35208-h818238b_41.tar.zst",
+          "member": "Library/bin/msvcp140.dll",
+          "sha256": "8f141b4454fa78db34bc1f28c571b4da0e00cd2c43f7ad0e282f313036826aae",
+          "bytes": 557648,
+          "target": "vendor/rhwp/msvcp140.dll"
+        },
+        {
+          "container": "info-vc14_runtime-14.44.35208-h818238b_41.tar.zst",
+          "member": "info/licenses/LICENSE.DOCX",
+          "sha256": "56541d4d697af432b6dfef4eb11bb1f296d12fdfc1b10b5d730fcfa6dfe47b92",
+          "bytes": 44,
+          "target": "vendor/rhwp/runtime-licenses/LICENSE.DOCX"
+        },
+        {
+          "container": "info-vc14_runtime-14.44.35208-h818238b_41.tar.zst",
+          "member": "info/licenses/LICENSE.RTF",
+          "sha256": "8099dc3cf9502c335da829e5c755948a12e3e6de490eb492a99deb673d883d8b",
+          "bytes": 9235,
+          "target": "vendor/rhwp/runtime-licenses/LICENSE.RTF"
+        },
+        {
+          "container": "info-vc14_runtime-14.44.35208-h818238b_41.tar.zst",
+          "member": "info/licenses/LICENSE.TXT",
+          "sha256": "cf89b37107c22cf8ce21043da1da143087b86ce7fd4556f91c25bc429533807e",
+          "bytes": 7590,
+          "target": "vendor/rhwp/runtime-licenses/LICENSE.TXT"
+        }
+      ]
+    },
+    {
+      "id": "rhwp-notices",
+      "version": "0.8.7",
+      "license": "LicenseRef-rhwp-third-party-notices",
+      "source_url": "https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/THIRD_PARTY_LICENSES.md",
+      "format": "file",
+      "url": "https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/THIRD_PARTY_LICENSES.md",
+      "sha256": "bb40fa5d0fa44bf2ff8b2b5dd7085562b58557a69eaa08b6bb5a4fc94252af88",
+      "bytes": 13162,
+      "filename": "rhwp-0.8.7-THIRD_PARTY_LICENSES.md",
+      "files": [
+        {
+          "target": "vendor/rhwp/THIRD_PARTY_LICENSES.md",
+          "sha256": "bb40fa5d0fa44bf2ff8b2b5dd7085562b58557a69eaa08b6bb5a4fc94252af88",
+          "bytes": 13162
+        }
+      ]
+    }
+  ]
+}

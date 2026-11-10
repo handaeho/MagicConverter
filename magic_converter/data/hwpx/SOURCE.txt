@@ -1,0 +1,2 @@
+Template source: https://github.com/airmang/python-hwpx/blob/128b0da1bcfdf8c2302c23f22a26942eff61f5d7/src/hwpx/data/Skeleton.hwpx
+License: Apache-2.0; only the blank document template is bundled.
