@@ -43,11 +43,11 @@
 
 ## Windows 다운로드
 
-Windows 10·11 64비트용 실행 파일은 [GitHub Releases](https://github.com/handaeho/MagicConverter/releases)에 배포할 예정입니다. 현재는 아래 방법으로 소스를 실행할 수 있습니다.
+Windows 10·11 64비트용 **MagicConverter 2.2.28**을 받을 수 있습니다. [릴리스 전체 보기](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.28)
 
-실행 파일이 게시되면 릴리스의 **Assets**에서 `magic_converter.exe`를 받아 실행하세요. 설치나 Python 설정 없이 열 수 있으며, 작업 표시줄의 알림 영역에 MagicConverter가 나타납니다. PowerShell에서 사용하려면 같은 릴리스의 `magic_converter-cli.exe`를 받아 `.\magic_converter-cli.exe --help`를 실행하세요.
+- 일반 앱과 런타임 목록을 같은 폴더에 받으세요. [일반 앱 EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter.exe) · [런타임 목록](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter-runtime.txt)
+- PowerShell에서 쓰려면 명령줄 버전도 받으세요. [명령줄 EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter-cli.exe)
 
-릴리스 안내에서 파일의 SHA-256과 기능별 필요 프로그램을 확인할 수 있습니다. Excel 인쇄와 Office 자동화에는 해당 프로그램이 설치되어 있어야 합니다.
 
 ## 소스로 시작하기
 
