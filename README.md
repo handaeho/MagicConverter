@@ -12,7 +12,7 @@
   <a href="#할-수-있는-일">주요 기능</a> ·
   <a href="#windows-다운로드">Windows 다운로드</a> ·
   <a href="#소스로-시작하기">소스 실행</a> ·
-  <a href="#CLI에서-변환하기">CLI</a> ·
+  <a href="#cli에서-변환하기">CLI</a> ·
   <a href="LICENSE">라이선스</a>
 </p>
 
@@ -43,10 +43,9 @@
 
 ## Windows 다운로드
 
-Windows 10·11 64비트용 **MagicConverter 2.2.28**을 받을 수 있습니다. [릴리스 전체 보기](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.28)
-
-- 일반 앱과 런타임 목록을 같은 폴더에 받으세요. [일반 앱 EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter.exe) · [런타임 목록](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter-runtime.txt)
-- PowerShell에서 쓰려면 CLI 버전도 받으세요. [CLI EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter-cli.exe)
+- **2.2.29 설치형** · Windows 10·11 64비트용입니다. 설치 EXE를 실행하고 동의하면 Python과 필수 라이브러리를 설치한 뒤 앱이 열립니다. [설치 EXE 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v2.2.29/MagicConverter-Setup.exe) · [릴리스 전체 보기](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.29)
+- **인터넷이 없는 PC** · 연결된 PC에서 런타임 자료를 한 번 만들고 설치 EXE와 함께 옮겨 설치할 수 있습니다. [오프라인 설치 안내](docs/user/PUBLIC_WINDOWS.md#인터넷이-없는-pc에-설치하기)
+- **2.2.28 실행형** · Python과 런타임을 직접 준비해 실행하는 버전입니다. [2.2.28 다운로드](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.28)
 
 
 ## 소스로 시작하기
