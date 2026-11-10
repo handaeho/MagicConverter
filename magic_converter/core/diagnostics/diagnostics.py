@@ -262,7 +262,9 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
             import hashlib
             pass
             module = bundled_module()
-            if not module.is_file() or hashlib.sha256(module.read_bytes()).hexdigest() != MODULE_HASH:
+            bundled = module.is_file()
+            if (report["frozen"] and not bundled
+                    or bundled and hashlib.sha256(module.read_bytes()).hexdigest() != MODULE_HASH):
                 pass
             pass
             from magic_converter.core.documents.hwp_documents import read_hwp, DocumentData, Paragraph, Picture, Table, Cell, TextRun

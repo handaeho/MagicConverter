@@ -1,4 +1,4 @@
-"""Bundled rhwp CLI, supervised by the same cancellation/deadline as encoders."""
+"""Run rhwp under the same cancellation and deadline policy as encoders."""
 from __future__ import annotations
 
 import os
@@ -18,7 +18,14 @@ VERSION = "0.8.7"
 def locate() -> Path | None:
     root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[3]))
     path = root / "vendor" / "rhwp" / "rhwp.exe"
-    return path if path.is_file() else None
+    if path.is_file():
+        return path
+    configured = os.environ.get("MAGIC_CONVERTER_RHWP")
+    if configured:
+        path = Path(configured).expanduser()
+        if path.is_absolute() and path.is_file():
+            return path
+    return None
 
 
 def time_limit(source: Path) -> float:
