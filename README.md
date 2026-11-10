@@ -12,7 +12,7 @@
   <a href="#할-수-있는-일">주요 기능</a> ·
   <a href="#windows-다운로드">Windows 다운로드</a> ·
   <a href="#소스로-시작하기">소스 실행</a> ·
-  <a href="#명령줄에서-변환하기">명령줄</a> ·
+  <a href="#CLI에서-변환하기">CLI</a> ·
   <a href="LICENSE">라이선스</a>
 </p>
 
@@ -37,7 +37,7 @@
 | **PDF와 문서 변환** | PDF → 편집 가능한 PPTX, Markdown → HTML, HWPX → DOCX |
 | **Excel 인쇄** | 설치된 Microsoft Excel로 저장된 인쇄 영역과 페이지 설정을 적용해 XLSX → PDF |
 | **미디어 변환** | FFmpeg로 동영상 형식 변경, 동영상에서 MP3 추출 |
-| **반복 작업** | 명령줄로 여러 파일 변환, 감시 폴더에서 새 파일 처리 |
+| **반복 작업** | CLI로 여러 파일 변환, 감시 폴더에서 새 파일 처리 |
 
 로컬 파일의 변환은 내 PC에서 처리합니다. 일부 형식의 변환이나 인쇄에 필요한 프로그램은 아래에서 확인할 수 있습니다.
 
@@ -46,7 +46,7 @@
 Windows 10·11 64비트용 **MagicConverter 2.2.28**을 받을 수 있습니다. [릴리스 전체 보기](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.28)
 
 - 일반 앱과 런타임 목록을 같은 폴더에 받으세요. [일반 앱 EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter.exe) · [런타임 목록](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter-runtime.txt)
-- PowerShell에서 쓰려면 명령줄 버전도 받으세요. [명령줄 EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter-cli.exe)
+- PowerShell에서 쓰려면 CLI 버전도 받으세요. [CLI EXE](https://github.com/handaeho/MagicConverter/releases/download/v2.2.28/magic_converter-cli.exe)
 
 
 ## 소스로 시작하기
@@ -69,7 +69,7 @@ py -3.14 -m venv .venv
 
 </details>
 
-## 명령줄에서 변환하기
+## CLI에서 변환하기
 
 예를 들어 현재 폴더의 `sample.jpg`를 PNG로 변환해 `out` 폴더에 저장합니다.
 
