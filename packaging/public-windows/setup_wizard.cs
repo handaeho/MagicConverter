@@ -10,6 +10,7 @@ internal sealed class SetupWizard : Form
     private readonly Button back;
     private readonly Button next;
     private readonly TextBox location;
+    private readonly TextBox destinationPreview;
     private readonly CheckBox agreement;
     private readonly string root;
     private readonly string version;
@@ -17,7 +18,7 @@ internal sealed class SetupWizard : Form
 
     internal string Destination { get; private set; }
 
-    internal SetupWizard(string root, string version, string defaultPath, string source, string license)
+    internal SetupWizard(string root, string version, string defaultParent, string source, string license)
     {
         this.root = root;
         this.version = version;
@@ -56,15 +57,23 @@ internal sealed class SetupWizard : Form
         folderFields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         folderFields.Controls.Add(new Label
         {
-            Text = "MagicConverter를 설치할 전용 폴더를 입력하세요.\r\n새 폴더나 비어 있는 폴더를 사용할 수 있습니다.",
+            Text = "상위 폴더를 선택하세요. 선택한 위치에 magic-converter 폴더를 새로 만듭니다.",
             AutoSize = true
         }, 0, 0);
         folderFields.SetColumnSpan(folderFields.GetControlFromPosition(0, 0), 2);
-        location = new TextBox { Name = "InstallFolder", Text = defaultPath, Dock = DockStyle.Fill };
+        location = new TextBox { Name = "InstallParent", Text = defaultParent, Dock = DockStyle.Fill };
         var browse = new Button { Text = "찾아보기", AutoSize = true };
         browse.Click += (sender, args) => Browse();
         folderFields.Controls.Add(location, 0, 1);
         folderFields.Controls.Add(browse, 1, 1);
+        var previewLabel = new Label { Text = "실제 설치 위치", AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
+        folderFields.Controls.Add(previewLabel, 0, 2);
+        folderFields.SetColumnSpan(previewLabel, 2);
+        destinationPreview = new TextBox { Name = "InstallDestination", ReadOnly = true, Dock = DockStyle.Fill };
+        folderFields.Controls.Add(destinationPreview, 0, 3);
+        folderFields.SetColumnSpan(destinationPreview, 2);
+        location.TextChanged += (sender, args) => UpdateDestinationPreview();
+        UpdateDestinationPreview();
         folder.Controls.Add(folderFields, 0, 1);
 
         pages = new Control[] { welcome, terms, folder };
@@ -138,7 +147,7 @@ internal sealed class SetupWizard : Form
     {
         using (var picker = new FolderBrowserDialog
         {
-            Description = "MagicConverter 전용 설치 폴더를 선택하세요.",
+            Description = "magic-converter 폴더를 만들 상위 폴더를 선택하세요.",
             ShowNewFolderButton = false
         })
         {
@@ -147,6 +156,14 @@ internal sealed class SetupWizard : Form
             if (picker.ShowDialog(this) == DialogResult.OK)
                 location.Text = picker.SelectedPath;
         }
+    }
+
+    private void UpdateDestinationPreview()
+    {
+        var parent = location.Text.Trim();
+        destinationPreview.Text = parent.Length == 0
+            ? ""
+            : parent.TrimEnd('\\') + "\\" + InstallLocation.FolderName;
     }
 
     private void Advance()
@@ -160,7 +177,7 @@ internal sealed class SetupWizard : Form
         }
         try
         {
-            var folder = InstallLocation.ValidateEmptyFolder(location.Text, root, version);
+            var folder = InstallLocation.ValidateNewFolder(InstallLocation.FolderUnder(location.Text), root, version);
             if (MessageBox.Show(this, "다음 폴더에 설치합니다.\n\n" + folder + "\n\n설치를 시작할까요?", Text,
                                 MessageBoxButtons.YesNo, MessageBoxIcon.Question,
                                 MessageBoxDefaultButton.Button2) != DialogResult.Yes)

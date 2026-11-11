@@ -43,8 +43,10 @@ internal static class Setup
             if (destination == null)
             {
                 var source = "설치 EXE에 포함된 Python, 필수 라이브러리, FFmpeg·FFprobe와 rhwp를 설치합니다.";
-                using (var wizard = new SetupWizard(root, Version, saved == null ? Path.Combine(root, Version) : saved.Folder,
-                                                    source, ReadLicense()))
+                var defaultParent = InstallLocation.DefaultParent(root, Version);
+                var parent = saved == null || InstallLocation.Same(saved.Folder, defaultParent)
+                    ? defaultParent : Path.GetDirectoryName(saved.Folder);
+                using (var wizard = new SetupWizard(root, Version, parent, source, ReadLicense()))
                 {
                     if (wizard.ShowDialog() != DialogResult.OK)
                         return 2;
@@ -128,7 +130,7 @@ internal static class Setup
 
     private static string FindExisting(string root, InstallLocation saved)
     {
-        var folder = saved == null ? Path.Combine(root, Version) : saved.Folder;
+        var folder = InstallLocation.LookupFolder(root, Version, saved);
         InstallLocation.RequirePlainPath(folder);
         if (Ready(folder) && (saved == null ? InstallLocation.HasMarker(folder, Version) : saved.Matches(Version)))
             return folder;
@@ -156,10 +158,12 @@ internal static class Setup
                     throw new IOException("이 버전이 이미 다른 폴더에 설치되어 있습니다.\n" + existing);
                 return existing;
             }
-            destination = InstallLocation.ValidateEmptyFolder(destination, root, Version);
+            destination = InstallLocation.ValidateNewFolder(destination, root, Version);
             var log = LogPath(root);
             InstallLocation.RequirePlainPath(log);
-            var staging = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(destination),
+            var installParent = Path.GetDirectoryName(destination);
+            var stagingParent = Directory.Exists(installParent) ? installParent : root;
+            var staging = Directory.CreateDirectory(Path.Combine(stagingParent,
                 ".mc-" + Guid.NewGuid().ToString("N").Substring(0, 12))).FullName;
             var runtime = Path.Combine(staging, "runtime");
             string scratch = null;
@@ -176,9 +180,8 @@ internal static class Setup
                 // Keep pip's target and its temporary extraction tree short. Some wheels
                 // use relative paths with "..", which cannot be passed through \\?\ paths.
                 var temp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temp");
-                var installParent = Path.GetDirectoryName(destination);
-                if (installParent.Length < temp.Length)
-                    temp = installParent;
+                if (stagingParent.Length < temp.Length)
+                    temp = stagingParent;
                 scratch = Directory.CreateDirectory(Path.Combine(temp, "mc-" + Guid.NewGuid().ToString("N").Substring(0, 12))).FullName;
                 var bundle = Path.Combine(scratch, "bundle");
                 report("내장 런타임 파일 확인 중");
@@ -203,12 +206,12 @@ internal static class Setup
                 var receipt = new InstallLocation(destination, Guid.NewGuid().ToString("N"));
                 File.WriteAllText(Path.Combine(staging, ".installed"), Version, Encoding.ASCII);
                 File.WriteAllText(Path.Combine(staging, InstallLocation.TokenFile), receipt.Token, Encoding.ASCII);
-                InstallLocation.ValidateEmptyFolder(destination, root, Version);
+                InstallLocation.ValidateNewFolder(destination, root, Version);
                 InstallLocation.Save(root, Version, receipt);
                 try
                 {
-                    if (Directory.Exists(destination))
-                        Directory.Delete(destination);
+                    if (InstallLocation.Same(destination, InstallLocation.DefaultFolder(root, Version)))
+                        Directory.CreateDirectory(installParent);
                     Directory.Move(staging, destination);
                 }
                 catch

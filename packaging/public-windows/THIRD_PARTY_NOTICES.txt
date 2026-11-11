@@ -1,4 +1,4 @@
-MagicConverter 2.2.31 Windows installer distribution
+MagicConverter 2.2.32 Windows installer distribution
 
 MagicConverter and its original artwork are licensed under AGPL-3.0-or-later.
 The license is included in the application archive and corresponding source.
@@ -13,7 +13,7 @@ Python's license is installed in runtime/LICENSE.txt. Wheel license files
 remain in each installed distribution's metadata. The source manifest records
 the exact embedded archives. Application and native corresponding sources,
 changes, installation information and checksums accompany the installer:
-https://github.com/handaeho/MagicConverter/releases/tag/v2.2.31
+https://github.com/handaeho/MagicConverter/releases/tag/v2.2.32
 
 This application uses Qt and Qt for Python 6.12.0 under LGPLv3, with the
 component-specific notices included in the PySide6 and Shiboken wheels.

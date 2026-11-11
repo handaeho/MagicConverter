@@ -73,7 +73,7 @@ internal static class Uninstaller
     {
         var root = InstallLocation.Root(Path.GetFullPath(local));
         var saved = InstallLocation.Read(root, Version);
-        return saved == null ? Path.Combine(root, Version) : saved.Folder;
+        return InstallLocation.LookupFolder(root, Version, saved);
     }
 
     internal static List<string> Remove(string local, string programs, string confirmedFolder, params RegistryKey[] userHives)
@@ -84,7 +84,7 @@ internal static class Uninstaller
         programs = Path.GetFullPath(programs);
         var root = InstallLocation.Root(local);
         var saved = InstallLocation.Read(root, Version);
-        var installed = saved == null ? Path.Combine(root, Version) : saved.Folder;
+        var installed = InstallLocation.LookupFolder(root, Version, saved);
         if (!InstallLocation.Same(installed, confirmedFolder))
             throw new IOException("설치 위치가 바뀌었습니다. 제거 도구를 다시 실행하세요.");
         var marker = Path.Combine(installed, ".installed");
@@ -140,6 +140,8 @@ internal static class Uninstaller
                     File.Delete(token);
                 RemoveEmpty(installed);
             }
+            if (InstallLocation.Same(installed, InstallLocation.DefaultFolder(root, Version)))
+                RemoveEmpty(InstallLocation.DefaultParent(root, Version));
             if (Directory.Exists(installed))
                 kept.Add(installed);
             var log = Path.Combine(root, "setup-" + Version + ".log");

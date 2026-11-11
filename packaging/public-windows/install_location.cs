@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 
 internal sealed class InstallLocation
 {
+    internal const string FolderName = "magic-converter";
     internal const string TokenFile = ".magicconverter-install-id";
     internal readonly string Folder;
     internal readonly string Token;
@@ -19,6 +20,29 @@ internal sealed class InstallLocation
     internal static string Root(string local)
     {
         return Path.Combine(local, "Programs", "MagicConverter");
+    }
+
+    internal static string DefaultParent(string root, string version)
+    {
+        return Path.Combine(root, version);
+    }
+
+    internal static string DefaultFolder(string root, string version)
+    {
+        return Path.Combine(DefaultParent(root, version), FolderName);
+    }
+
+    internal static string LookupFolder(string root, string version, InstallLocation saved)
+    {
+        if (saved != null)
+            return saved.Folder;
+        var legacy = DefaultParent(root, version);
+        return HasMarker(legacy, version) ? legacy : DefaultFolder(root, version);
+    }
+
+    internal static string FolderUnder(string parent)
+    {
+        return Path.Combine(parent.Trim(), FolderName);
     }
 
     private static string Record(string root, string version)
@@ -80,22 +104,25 @@ internal sealed class InstallLocation
         var folder = Path.GetFullPath(value).TrimEnd('\\');
         if (folder.Length > 175 || new DriveInfo(Path.GetPathRoot(folder)).DriveType != DriveType.Fixed)
             throw new IOException("175자 이내의 로컬 고정 디스크 폴더를 지정하세요.");
-        var defaultFolder = Path.Combine(root, version);
+        var inRoot = Below(folder, root);
+        var defaultPath = Same(folder, DefaultParent(root, version)) || Same(folder, DefaultFolder(root, version));
         var profile = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(root)), "magic_converter");
-        if (Same(folder, root) || Below(root, folder) || Below(folder, root) && !Same(folder, defaultFolder) ||
+        if (Same(folder, root) || Below(root, folder) || inRoot && !defaultPath ||
             Same(folder, profile) || Below(folder, profile) || Below(profile, folder))
             throw new IOException("앱 데이터 폴더와 겹치지 않는 전용 설치 폴더를 지정하세요.");
         RequirePlainPath(folder);
         return folder;
     }
 
-    internal static string ValidateEmptyFolder(string value, string root, string version)
+    internal static string ValidateNewFolder(string value, string root, string version)
     {
         var folder = ValidatePath(value, root, version);
-        if (!Same(folder, Path.Combine(root, version)) && !Directory.Exists(Path.GetDirectoryName(folder)))
-            throw new IOException("이미 있는 상위 폴더 아래에 설치 위치를 지정하세요.");
-        if (File.Exists(folder) || Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any())
-            throw new IOException("새 폴더 또는 비어 있는 폴더를 선택하세요.");
+        if (!Same(Path.GetFileName(folder), FolderName))
+            throw new IOException("설치 폴더 이름은 " + FolderName + "이어야 합니다.");
+        if (!Same(folder, DefaultFolder(root, version)) && !Directory.Exists(Path.GetDirectoryName(folder)))
+            throw new IOException("이미 있는 상위 폴더를 선택하세요.");
+        if (File.Exists(folder) || Directory.Exists(folder))
+            throw new IOException("선택한 폴더에 이미 " + FolderName + " 이름이 있습니다. 다른 상위 폴더를 선택하세요.\n" + folder);
         return folder;
     }
 

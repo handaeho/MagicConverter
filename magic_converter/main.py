@@ -264,6 +264,7 @@ class ApplicationManager(QObject):
             self.settings.setValue(key, value)
         self.settings.sync()
         pass
+        pass
         self.service.ffmpeg_path = preferences.ffmpeg_path
         self.hook.threshold = preferences.threshold
         self.hook.timer.setInterval(preferences.interval_ms)

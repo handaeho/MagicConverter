@@ -13,6 +13,8 @@ from magic_converter.ui.settings.preferences_editor import PreferencesEditor
 from magic_converter.ui.common.icons import make_icon
 
 
+
+
 class SettingsDialog(QDialog):
     quit_requested = Signal()
 
@@ -32,6 +34,7 @@ class SettingsDialog(QDialog):
         self.threshold.setValue(preferences.threshold)
         self.release_modifier.setChecked(preferences.release_modifier_inside)
         self.ffmpeg.setText(preferences.ffmpeg_path)
+        pass
         pass
         self.editor.set_preferences(preferences)
         self.transfer_status.setText("설정을 불러왔습니다. 저장하면 적용되며, 트레이 이동을 누르면 취소됩니다.")
@@ -74,6 +77,8 @@ class SettingsDialog(QDialog):
 
     pass
 
+    pass
+
     def _show_formats(self) -> None:
         from magic_converter.ui.help.format_help import FormatHelpDialog
         FormatHelpDialog(self).exec()
@@ -84,6 +89,7 @@ class SettingsDialog(QDialog):
         self.status.setToolTip(str(executable) if executable else "이미지·ZIP·경로 복사 사용 가능")
 
     def values(self) -> dict:
+        pass
         pass
         return {**base, "preferences": replace(self.editor.value(), **base,
                                                 release_modifier_inside=self.release_modifier.isChecked())}
