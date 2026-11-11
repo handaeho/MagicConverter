@@ -2,15 +2,23 @@
   <img src="assets/readme/hero.svg" alt="MagicConverter — Windows 파일 변환기" width="100%">
 </h1>
 
-탐색기에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
+탐색기에서 파일을 끌어 즉시 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
 
 [EXE로 시작하기](#exe로-시작하기) · [CLI로 시작하기](#cli로-시작하기)
 
 ## EXE로 시작하기
 
-ZIP에는 설치 마법사 `MagicConverter-Setup.exe`와 제거 마법사 `Uninstall.exe`가 들어 있습니다. 압축을 푼 뒤 설치 마법사를 실행합니다. [MagicConverter 2.2.34 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.34/MagicConverter-2.2.34-Windows-x64.zip)
+ZIP에는 다음 실행 프로그램이 포함됩니다.
 
-Windows 10·11 64비트용이며, 설치 마법사가 내장된 Python, 필수 라이브러리, FFmpeg·FFprobe와 rhwp를 설치합니다. 인터넷 연결 없이 설치할 수 있습니다.
+- [MagicConverter 2.2.34 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.34/MagicConverter-2.2.34-Windows-x64.zip)
+- 설치 마법사 `MagicConverter-Setup.exe`
+- 제거 마법사 `Uninstall.exe`
+
+압축을 푼 뒤 설치 마법사를 실행합니다. 
+
+- Windows 10·11 64비트용입니다.
+- 설치 마법사가 내장된 Python, 필수 라이브러리, FFmpeg·FFprobe와 rhwp를 설치합니다.
+- 인터넷 연결 없이 설치할 수 있습니다.
 
 1. 설치 안내를 읽고 라이선스에 동의합니다.
 2. 설치 폴더를 고르고 확인한 뒤 **설치**를 누릅니다.
@@ -32,13 +40,13 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 .\runtime\python.exe .\app\run_magic_converter.py convert --to png "C:\Files\sample.jpg" --output "C:\Files\out"
 ```
 
-현재는 Python 파일을 실행하는 방식입니다. MCP 전환은 후속 버전에서 진행할 예정입니다.
+현재는 Python 파일을 실행하는 방식입니다. <br> **MCP 전환은 후속 버전에서 공개**할 예정입니다.
 
 ## 지원 확장자와 변환 가능 목록
 
-2.2.34에 등록된 **79종·89개 확장자 표기** 전체입니다. 입력 확장자 88개와 출력 전용 `.html`을 포함합니다. 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
+현재 지원하는 **79종·89개 확장자 표기** 전체입니다. <br> 입력 확장자 88개와 출력 전용 `.html`을 포함합니다. <br> 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
 
-**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상이고, **CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. 필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. 여러 파일을 함께 놓으면 공통 대상만 표시됩니다. 실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
+**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상이고, **CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. <br> 필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. <br> 여러 파일을 함께 놓으면 공통 대상만 표시됩니다. <br> 실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
 
 | 분류 | 입력 확장자 | 변환 휠 출력 | CLI 추가 출력 | 조건·특징 |
 | --- | --- | --- | --- | --- |
@@ -135,4 +143,4 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 - 구조화 자료의 JSONL 출력에는 최상위 배열이, TOML 출력에는 최상위 객체가 필요합니다. CSV/TSV 자료 출력은 같은 열을 가진 객체 배열에 한정됩니다. XML은 자료형 보존용 컨테이너 또는 XML 문서 모델로 처리합니다.
 - 형식 변환 외에 모든 파일은 Ctrl 파일 도구의 **ZIP 압축**으로 묶을 수 있습니다. CLI 추가 대상은 `convert --to wav sample.mp4`처럼 선택하며, PDF → PPTX 모드는 `--action pptx_image` 또는 `--action pptx_editable`로 고릅니다.
 
-프로젝트 코드와 [MagicConverter 아이콘](assets/README.md)은 [AGPL-3.0-or-later](LICENSE)로 공개합니다. [외부 구성요소 고지](docs/legal/THIRD_PARTY_NOTICES.md)
+프로젝트 코드와 [MagicConverter 아이콘](assets/README.md)은 [AGPL-3.0-or-later](LICENSE)로 공개합니다. <br> [외부 구성요소 고지](docs/legal/THIRD_PARTY_NOTICES.md)
