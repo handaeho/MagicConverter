@@ -10,7 +10,7 @@ internal abstract class WizardWindow : Form
 {
     private readonly Panel host = new Panel { Dock = DockStyle.Fill };
     private readonly Icon brandIcon;
-    private readonly Font heading = new Font("Malgun Gothic", 15F);
+    private readonly Font heading = new Font("Malgun Gothic", 12F);
     private readonly Font titleFont = new Font("Malgun Gothic", 10F, FontStyle.Bold);
     private readonly Font bodyFont = new Font("Malgun Gothic", 9F);
     private bool working;
@@ -92,10 +92,15 @@ internal abstract class WizardWindow : Form
         banner.Paint += (sender, args) => PaintBanner(banner, args.Graphics);
         layout.Controls.Add(banner, 0, 0);
         var copy = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(18, 29, 20, 12) };
-        copy.RowStyles.Add(new RowStyle(SizeType.Absolute, 84F));
+        copy.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        copy.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         copy.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         copy.RowStyles.Add(new RowStyle(SizeType.Absolute, extra == null ? 0F : 102F));
-        copy.Controls.Add(new Label { Text = title, Font = heading, Dock = DockStyle.Fill }, 0, 0);
+        copy.Controls.Add(new Label
+        {
+            Text = title, Font = heading, AutoSize = true, Dock = DockStyle.Fill,
+            Margin = new Padding(3, 3, 3, 14)
+        }, 0, 0);
         copy.Controls.Add(new Label { Text = description, Dock = DockStyle.Fill }, 0, 1);
         if (extra != null)
             copy.Controls.Add(extra, 0, 2);

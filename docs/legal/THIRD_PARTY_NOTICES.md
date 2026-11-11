@@ -1,13 +1,13 @@
 # Third-party components
 
-## Windows installer 2.2.33
+## Windows installer 2.2.34
 
 The installer embeds CPython 3.14.10, 34 pinned Python wheels, FFmpeg and
 FFprobe 9.0.2 built from source, rhwp 0.8.7 and the app-local Microsoft VC runtime.
 The engine license files and notices are installed under `app/vendor`.
 [Installer notices](../../packaging/public-windows/THIRD_PARTY_NOTICES.txt)
 
-The [v2.2.33 release](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.33)
+The [v2.2.34 release](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.34)
 includes the source archives, build inputs, patches and notices for FFmpeg and
 its static codecs, Qt/PySide, PyMuPDF/MuPDF, HEIC and rhwp. The installer displays
 the Microsoft runtime terms. See the [source and build instructions](../release/WINDOWS_INSTALLER_SOURCE.md)
