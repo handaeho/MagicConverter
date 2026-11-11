@@ -40,13 +40,20 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 .\runtime\python.exe .\app\run_magic_converter.py convert --to png "C:\Files\sample.jpg" --output "C:\Files\out"
 ```
 
-현재는 Python 파일을 실행하는 방식입니다. <br> **MCP 전환은 후속 버전에서 공개**할 예정입니다.
+현재는 Python 파일을 실행하는 방식입니다. <br> 
+**MCP 전환은 후속 버전에서 공개**할 예정입니다.
 
 ## 지원 확장자와 변환 가능 목록
 
-현재 지원하는 **79종·89개 확장자 표기** 전체입니다. <br> 입력 확장자 88개와 출력 전용 `.html`을 포함합니다. <br> 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
+현재 지원하는 **79종·89개 확장자 표기** 전체입니다. <br> 
+입력 확장자 88개와 출력 전용 `.html`을 포함합니다. <br> 
+대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
 
-**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상이고, **CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. <br> 필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. <br> 여러 파일을 함께 놓으면 공통 대상만 표시됩니다. <br> 실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
+**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상입니다. <br> 
+**CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. <br> 
+필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. <br> 
+여러 파일을 함께 놓으면 공통 대상만 표시됩니다. <br> 
+실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
 
 | 분류 | 입력 확장자 | 변환 휠 출력 | CLI 추가 출력 | 조건·특징 |
 | --- | --- | --- | --- | --- |
@@ -143,4 +150,5 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 - 구조화 자료의 JSONL 출력에는 최상위 배열이, TOML 출력에는 최상위 객체가 필요합니다. CSV/TSV 자료 출력은 같은 열을 가진 객체 배열에 한정됩니다. XML은 자료형 보존용 컨테이너 또는 XML 문서 모델로 처리합니다.
 - 형식 변환 외에 모든 파일은 Ctrl 파일 도구의 **ZIP 압축**으로 묶을 수 있습니다. CLI 추가 대상은 `convert --to wav sample.mp4`처럼 선택하며, PDF → PPTX 모드는 `--action pptx_image` 또는 `--action pptx_editable`로 고릅니다.
 
-프로젝트 코드와 [MagicConverter 아이콘](assets/README.md)은 [AGPL-3.0-or-later](LICENSE)로 공개합니다. <br> [외부 구성요소 고지](docs/legal/THIRD_PARTY_NOTICES.md)
+프로젝트 코드와 [MagicConverter 아이콘](assets/README.md)은 [AGPL-3.0-or-later](LICENSE)로 공개합니다. <br> 
+[외부 구성요소 고지](docs/legal/THIRD_PARTY_NOTICES.md)
