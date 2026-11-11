@@ -3,6 +3,7 @@
 import hashlib
 import json
 import shutil
+from pathlib import PurePosixPath
 from urllib.request import urlopen
 from zipfile import ZIP_STORED, ZipFile, ZipInfo
 
@@ -37,6 +38,20 @@ def write_runtime_archive(destination, bootstrap, lock, runtime_dir=None):
     download_dir = destination.parent / "runtime-downloads"
     if runtime_dir is None:
         download_dir.mkdir()
+        bundle = bootstrap.get("inputs_bundle")
+        if bundle:
+            package = checked_file(download(bundle["url"], download_dir / bundle["filename"]), bundle["sha256"])
+            runtime_dir = download_dir / "inputs"
+            with ZipFile(package) as archive:
+                names = archive.namelist()
+                if len({name.casefold() for name in names}) != len(names):
+                    raise ValueError("Duplicate runtime input bundle members")
+                for entry in archive.infolist():
+                    path = PurePosixPath(entry.filename)
+                    if (path.is_absolute() or ".." in path.parts or "\\" in entry.filename
+                            or ":" in entry.filename or entry.external_attr >> 16 & 0o170000 == 0o120000):
+                        raise ValueError("Unsafe runtime input bundle member: " + entry.filename)
+                archive.extractall(runtime_dir)
     inputs = {}
     for kind in ("python", "pip"):
         pin = bootstrap[kind]
@@ -54,7 +69,7 @@ def write_runtime_archive(destination, bootstrap, lock, runtime_dir=None):
             path = download(url, download_dir / name)
         else:
             prefix = f"{package.replace('-', '_')}-{version}-"
-            matches = [path for path in cached_wheels if path.name.startswith(prefix)]
+            matches = [path for path in cached_wheels if path.name.casefold().startswith(prefix.casefold())]
             if len(matches) != 1:
                 raise ValueError(f"Expected one cached wheel for {requirement}")
             path, = matches

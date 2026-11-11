@@ -39,14 +39,14 @@ internal sealed class SetupWizard : Form
             Dock = DockStyle.Fill
         }, 0, 1);
 
-        var terms = Page("2. 프로젝트 라이선스");
+        var terms = Page("2. 프로젝트 및 포함 구성요소 라이선스");
         var licenseText = new TextBox
         {
             Name = "LicenseText", Dock = DockStyle.Fill, Multiline = true, ReadOnly = true,
             ScrollBars = ScrollBars.Vertical, Text = license.Replace("\r\n", "\n").Replace("\n", "\r\n")
         };
         terms.Controls.Add(licenseText, 0, 1);
-        agreement = new CheckBox { Name = "LicenseAgreement", Text = "라이선스 내용을 읽었으며 동의합니다.", AutoSize = true };
+        agreement = new CheckBox { Name = "LicenseAgreement", Text = "프로젝트와 포함 구성요소의 라이선스에 동의합니다.", AutoSize = true };
         agreement.CheckedChanged += (sender, args) => UpdateButtons();
         terms.Controls.Add(agreement, 0, 2);
 

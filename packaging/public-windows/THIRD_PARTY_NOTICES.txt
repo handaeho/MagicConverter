@@ -1,4 +1,4 @@
-MagicConverter Windows installer distribution
+MagicConverter 2.2.31 Windows installer distribution
 
 MagicConverter and its original artwork are licensed under AGPL-3.0-or-later.
 The license is included in the application archive and corresponding source.
@@ -10,20 +10,35 @@ under magic_converter/data/hwpx.
 Setup includes the pinned Windows embeddable distribution of CPython, pip,
 and the Python runtime wheels listed in magic_converter-runtime.txt.
 Python's license is installed in runtime/LICENSE.txt. Wheel license files
-remain in each installed distribution's metadata. The source manifest
-records the hashes of the original embedded archives.
+remain in each installed distribution's metadata. The source manifest records
+the exact embedded archives. Application and native corresponding sources,
+changes, installation information and checksums accompany the installer:
+https://github.com/handaeho/MagicConverter/releases/tag/v2.2.31
 
-Qt for Python and Qt are available under module-specific terms:
+This application uses Qt and Qt for Python 6.12.0 under LGPLv3, with the
+component-specific notices included in the PySide6 and Shiboken wheels.
+QtBase, QtSvg and QtImageFormats were built from source. You may replace
+compatible DLLs and plugins in runtime/Lib/site-packages/PySide6 and
+reverse engineer to debug your modifications to the LGPL libraries.
 https://doc.qt.io/qtforpython-6/licenses.html
 https://doc.qt.io/qt-6/licensing.html
-PyMuPDF and MuPDF are offered under AGPL-3.0 or commercial terms:
-https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright
-The pillow-heif 1.8.1 Windows wheel lists libheif 1.23.6, libde265 1.1.3,
-and x265 4.3 in LICENSES_bundled.txt. The wheel's notices also describe
-the compiler runtime terms. See the installed pillow_heif distribution metadata.
 
-The engine archive contains Gyan FFmpeg/FFprobe 9.0.2 (GPL-3.0-or-later),
-rhwp 0.8.7 (MIT), and its app-local Microsoft Visual C++ runtime. Original
-notices are installed under app/vendor/ffmpeg and app/vendor/rhwp.
+This distribution uses the AGPL option for PyMuPDF/MuPDF 1.28.2.
+https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright
+The pillow-heif 1.8.1 wheel uses source builds of libheif 1.23.6 and
+libde265 1.1.3 (LGPLv3), and x265 from upstream tag 4.3 (GPL-2.0-or-later,
+distributed using its GPLv3 option). The libraries are dynamically linked.
+License texts are in the pillow_heif distribution metadata. Compatible HEIC
+DLLs in runtime/Lib/site-packages can be replaced.
+
+The engine archive contains our FFmpeg/FFprobe 9.0.2 source build
+(GPL-3.0-or-later) with x264, libvpx, LAME, Opus, libogg, libvorbis and zlib.
+The rhwp 0.8.7 executable (MIT) is from its upstream Windows release.
+Licenses and third-party notices are under app/vendor/ffmpeg and app/vendor/rhwp.
 FFmpeg source revision: https://github.com/FFmpeg/FFmpeg/commit/946fcce07b6dcd0331c8cc609192aeff5e1924f8
 rhwp source: https://github.com/edwardkim/rhwp/tree/v0.8.7
+
+The app-local Microsoft Visual C++ runtime is distributed separately from the
+open-source license grants. The Microsoft runtime terms are displayed by
+the installer and included in app/licenses/Microsoft-VC-Runtime-2026.txt.
+

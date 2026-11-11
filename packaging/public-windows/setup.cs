@@ -75,8 +75,14 @@ internal static class Setup
     {
         using (var payload = Assembly.GetExecutingAssembly().GetManifestResourceStream("magic-converter-setup.zip"))
         using (var archive = new ZipArchive(payload, ZipArchiveMode.Read))
-        using (var reader = new StreamReader(archive.GetEntry("app/LICENSE").Open(), Encoding.UTF8))
-            return reader.ReadToEnd();
+        {
+            var text = new StringBuilder();
+            foreach (var name in new[] { "app/packaging/public-windows/THIRD_PARTY_NOTICES.txt",
+                                         "app/LICENSE", "app/licenses/Microsoft-VC-Runtime-2026.txt" })
+                using (var reader = new StreamReader(archive.GetEntry(name).Open(), Encoding.UTF8))
+                    text.AppendLine(reader.ReadToEnd()).AppendLine();
+            return text.ToString();
+        }
     }
 
     private static void ShowProgress(Action<Action<string>> operation)
@@ -179,6 +185,8 @@ internal static class Setup
                 ExtractVerified("magic-converter-runtime.zip", RuntimeInfo.ArchiveSha256, bundle);
                 var shortRuntime = Path.Combine(scratch, "runtime");
                 python = UnpackPython(bundle, shortRuntime);
+                foreach (var file in Directory.GetFiles(Path.Combine(staging, "app", "vendor", "runtime"), "*.dll"))
+                    File.Copy(file, Path.Combine(shortRuntime, Path.GetFileName(file)), true);
                 var pipWheel = Path.Combine(bundle, RuntimeInfo.PipWheel);
                 var site = Path.Combine(shortRuntime, "Lib", "site-packages");
                 report("내장 필수 라이브러리 설치 중");

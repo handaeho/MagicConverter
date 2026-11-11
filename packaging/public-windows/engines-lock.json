@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "platform": "win_amd64",
+  "artifacts": [
+    {
+      "id": "windows-native-engines",
+      "version": "2.2.31",
+      "license": "LicenseRef-MagicConverter-Native-Components",
+      "source_url": "https://github.com/handaeho/MagicConverter/releases/tag/v2.2.31",
+      "format": "zip",
+      "url": "https://github.com/handaeho/MagicConverter/releases/download/v2.2.31/MagicConverter-native-engines.zip",
+      "sha256": "202c0f159ff8eb2c27861805c3d89fd9825828f01833d1e837648244195b922f",
+      "bytes": 49808414,
+      "filename": "MagicConverter-native-engines.zip",
+      "files": [
+        {
+          "member": "vendor/ffmpeg/LICENSE",
+          "target": "vendor/ffmpeg/LICENSE",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "bytes": 35147
+        },
+        {
+          "member": "vendor/ffmpeg/README.txt",
+          "target": "vendor/ffmpeg/README.txt",
+          "sha256": "ee4c00b6e1142211a26ca768ed059b096424d8eac447b37146bfa352fbdfb29c",
+          "bytes": 56867
+        },
+        {
+          "member": "vendor/ffmpeg/ffmpeg.exe",
+          "target": "vendor/ffmpeg/ffmpeg.exe",
+          "sha256": "de6e8b5026cab8ca9622eee2c7ef7e34a2b25749fdd36e8ecd465269c2c39a25",
+          "bytes": 33729024
+        },
+        {
+          "member": "vendor/ffmpeg/ffprobe.exe",
+          "target": "vendor/ffmpeg/ffprobe.exe",
+          "sha256": "73eab897478595791446c3384dce3007ffeb80c964a76b9bef5cc3188656c832",
+          "bytes": 33548800
+        },
+        {
+          "member": "vendor/rhwp/LICENSE",
+          "target": "vendor/rhwp/LICENSE",
+          "sha256": "d6ea0e91bf1e6136b606e288e7e22dc44e39b4f087d4bdcde2bd0d8aaf5314dd",
+          "bytes": 1093
+        },
+        {
+          "member": "vendor/rhwp/THIRD_PARTY_LICENSES.md",
+          "target": "vendor/rhwp/THIRD_PARTY_LICENSES.md",
+          "sha256": "bb40fa5d0fa44bf2ff8b2b5dd7085562b58557a69eaa08b6bb5a4fc94252af88",
+          "bytes": 13162
+        },
+        {
+          "member": "vendor/rhwp/msvcp140.dll",
+          "target": "vendor/rhwp/msvcp140.dll",
+          "sha256": "59d325227321d52b9a523ea401ce6787a5d59f78229a0ff3a6f124e5d3445685",
+          "bytes": 652136
+        },
+        {
+          "member": "vendor/rhwp/rhwp.exe",
+          "target": "vendor/rhwp/rhwp.exe",
+          "sha256": "1e1b7ae6c9ffd895e1a330a191666a2629cc7eba2fc9e37442e9f1755741bb62",
+          "bytes": 49458688
+        },
+        {
+          "member": "vendor/rhwp/runtime-licenses/LICENSE.TXT",
+          "target": "vendor/rhwp/runtime-licenses/LICENSE.TXT",
+          "sha256": "c15f0776c632b97bc3b01dbc3090ae347bb406235ae7132601bbaba91624e4fc",
+          "bytes": 11945
+        },
+        {
+          "member": "vendor/rhwp/vcruntime140.dll",
+          "target": "vendor/rhwp/vcruntime140.dll",
+          "sha256": "eb1ee979bf02324712346e5bdbfc59c785388bc50d18cc2688aae4b0734915a0",
+          "bytes": 176488
+        },
+        {
+          "member": "vendor/rhwp/vcruntime140_1.dll",
+          "target": "vendor/rhwp/vcruntime140_1.dll",
+          "sha256": "a14b4a42a2c6df04d6d53a8340816023d953406f7f3d94996c7cab30c414ff63",
+          "bytes": 50544
+        },
+        {
+          "member": "vendor/runtime/LICENSE.TXT",
+          "target": "vendor/runtime/LICENSE.TXT",
+          "sha256": "c15f0776c632b97bc3b01dbc3090ae347bb406235ae7132601bbaba91624e4fc",
+          "bytes": 11945
+        },
+        {
+          "member": "vendor/runtime/concrt140.dll",
+          "target": "vendor/runtime/concrt140.dll",
+          "sha256": "8efda0374a4b4df975feeefbea3d86cafdd36802a0144c3d261295bd268071c7",
+          "bytes": 368064
+        },
+        {
+          "member": "vendor/runtime/msvcp140.dll",
+          "target": "vendor/runtime/msvcp140.dll",
+          "sha256": "59d325227321d52b9a523ea401ce6787a5d59f78229a0ff3a6f124e5d3445685",
+          "bytes": 652136
+        },
+        {
+          "member": "vendor/runtime/msvcp140_1.dll",
+          "target": "vendor/runtime/msvcp140_1.dll",
+          "sha256": "1c6522f4d005539109aa040f063659704bfda94a224142f50942573cfbcf7ec9",
+          "bytes": 35696
+        },
+        {
+          "member": "vendor/runtime/msvcp140_2.dll",
+          "target": "vendor/runtime/msvcp140_2.dll",
+          "sha256": "56318c983acc3914f8523be61f6b1f1c91e6c1ae4b6c531169882aa59baaec6b",
+          "bytes": 271800
+        },
+        {
+          "member": "vendor/runtime/msvcp140_atomic_wait.dll",
+          "target": "vendor/runtime/msvcp140_atomic_wait.dll",
+          "sha256": "8b10c6bd4c3c427ce7c8be96ef0fef0f8187bc236962be62a03caef834b37dcd",
+          "bytes": 58736
+        },
+        {
+          "member": "vendor/runtime/msvcp140_codecvt_ids.dll",
+          "target": "vendor/runtime/msvcp140_codecvt_ids.dll",
+          "sha256": "695dbb4921cc1536429d238488cbee73581357a2fa05bb5c87b0f6ae48efcaca",
+          "bytes": 31080
+        },
+        {
+          "member": "vendor/runtime/vccorlib140.dll",
+          "target": "vendor/runtime/vccorlib140.dll",
+          "sha256": "d247b63cf9b93a5769b5ac205e10fe29029c8ddce1b800159dc6061a36a1c149",
+          "bytes": 351600
+        },
+        {
+          "member": "vendor/runtime/vcruntime140.dll",
+          "target": "vendor/runtime/vcruntime140.dll",
+          "sha256": "eb1ee979bf02324712346e5bdbfc59c785388bc50d18cc2688aae4b0734915a0",
+          "bytes": 176488
+        },
+        {
+          "member": "vendor/runtime/vcruntime140_1.dll",
+          "target": "vendor/runtime/vcruntime140_1.dll",
+          "sha256": "a14b4a42a2c6df04d6d53a8340816023d953406f7f3d94996c7cab30c414ff63",
+          "bytes": 50544
+        },
+        {
+          "member": "vendor/runtime/vcruntime140_threads.dll",
+          "target": "vendor/runtime/vcruntime140_threads.dll",
+          "sha256": "44a0a0b925242699f2b31bf40a43b54ab3513584dfe7869521d1983e40ea1f06",
+          "bytes": 38840
+        }
+      ]
+    }
+  ]
+}

@@ -24,17 +24,21 @@ ENGINE_FILES = frozenset("""
 vendor/ffmpeg/ffmpeg.exe vendor/ffmpeg/ffprobe.exe vendor/ffmpeg/LICENSE vendor/ffmpeg/README.txt
 vendor/rhwp/rhwp.exe vendor/rhwp/LICENSE vendor/rhwp/THIRD_PARTY_LICENSES.md
 vendor/rhwp/msvcp140.dll vendor/rhwp/vcruntime140.dll vendor/rhwp/vcruntime140_1.dll
-vendor/rhwp/runtime-licenses/LICENSE.DOCX vendor/rhwp/runtime-licenses/LICENSE.RTF vendor/rhwp/runtime-licenses/LICENSE.TXT
+vendor/rhwp/runtime-licenses/LICENSE.TXT vendor/runtime/LICENSE.TXT
+vendor/runtime/concrt140.dll vendor/runtime/msvcp140.dll vendor/runtime/msvcp140_1.dll
+vendor/runtime/msvcp140_2.dll vendor/runtime/msvcp140_atomic_wait.dll vendor/runtime/msvcp140_codecvt_ids.dll
+vendor/runtime/vccorlib140.dll vendor/runtime/vcruntime140.dll vendor/runtime/vcruntime140_1.dll
+vendor/runtime/vcruntime140_threads.dll
 """.split())
 RUNTIME_PACKAGES = set("""
 beautifulsoup4 brotli cffi charset-normalizer cryptography defusedxml et-xmlfile
 fonttools lxml markdown olefile openpyxl pdfminer-six pdfplumber pillow pillow-heif
-pycparser pymupdf pypdf pypdfium2 pyside6-essentials python-docx python-pptx
+pycparser pymupdf pypdf pypdfium2 pyside6 python-docx python-pptx
 pywin32 pyyaml rarfile shiboken6 soupsieve striprtf tomli-w typing-extensions
 xlrd xlsxwriter zopfli
 """.split())
 APP_DATA = """
-LICENSE assets/magic_converter-tool.ico licenses/Filee-MIT.txt run_magic_converter.py
+LICENSE assets/magic_converter-tool.ico licenses/Filee-MIT.txt licenses/Microsoft-VC-Runtime-2026.txt run_magic_converter.py
 packaging/public-windows/THIRD_PARTY_NOTICES.txt
 magic_converter/data/hwp/README.txt magic_converter/data/hwp/table_picture.hwp
 magic_converter/data/hwpx/LICENSE magic_converter/data/hwpx/NOTICE
@@ -42,9 +46,11 @@ magic_converter/data/hwpx/SOURCE.txt magic_converter/data/hwpx/Skeleton.hwpx
 """.split()
 SOURCE_INPUTS = """
 assets/README.md assets/magic_converter-tool.svg docs/user/PUBLIC_WINDOWS.md docs/user/UNINSTALL_WINDOWS.md
+docs/release/WINDOWS_INSTALLER_SOURCE.md
 packaging/app.manifest packaging/public-windows/launcher.cs requirements/windows-py314.lock
 packaging/public-windows/runtime-bootstrap.json
-packaging/vendor-lock.json tools/__init__.py tools/dependencies/__init__.py tools/dependencies/fetch_vendor.py
+packaging/public-windows/runtime-requirements.txt
+packaging/public-windows/engines-lock.json tools/__init__.py tools/dependencies/__init__.py tools/dependencies/fetch_vendor.py
 packaging/public-windows/setup.cs packaging/public-windows/process_arguments.cs
 packaging/public-windows/install_location.cs packaging/public-windows/setup_wizard.cs
 packaging/public-windows/uninstall.cs packaging/public-windows/uninstall-files.txt
@@ -120,7 +126,7 @@ def build(output, runtime_dir=None, vendor_cache=None):
     )
     if identity is None or identity.get("version") != version + ".0":
         raise ValueError("Windows manifest and app versions differ")
-    lock = runtime_lock(config["requirements/windows-py314.lock"])
+    lock = runtime_lock(config["packaging/public-windows/runtime-requirements.txt"])
     source = {**app, **config, "magic_converter-runtime.txt": lock}
     source_zip = zip_bytes(source)
     with ZipFile(io.BytesIO(source_zip)) as archive:
@@ -157,7 +163,7 @@ def build(output, runtime_dir=None, vendor_cache=None):
         bootstrap = json.loads(config["packaging/public-windows/runtime-bootstrap.json"])
         runtime_digest, runtime_files = write_runtime_archive(temp / "runtime.zip", bootstrap, lock, runtime_dir)
         vendor = temp / "engines"
-        vendor_manifest = json.loads(config["packaging/vendor-lock.json"])
+        vendor_manifest = json.loads(config["packaging/public-windows/engines-lock.json"])
         entries = fetch_vendor.targets(vendor, vendor_manifest)
         if entries.keys() != ENGINE_FILES:
             raise ValueError("Installer engine inputs must match the FFmpeg and rhwp allowlist")

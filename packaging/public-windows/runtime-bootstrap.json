@@ -9,5 +9,10 @@
     "filename": "pip-26.3-py3-none-any.whl",
     "url": "https://files.pythonhosted.org/packages/07/25/ee8c38ae72d66b844ce8eb9711ba905dba21ca1a8a0c960057c41cd23337/pip-26.3-py3-none-any.whl",
     "sha256": "f3b60b20ffaadd4415ed7957212a38ac63fa4c5fa375bd0f4a797777940fad13"
+  },
+  "inputs_bundle": {
+    "filename": "MagicConverter-runtime-inputs.zip",
+    "url": "https://github.com/handaeho/MagicConverter/releases/download/v2.2.31/MagicConverter-runtime-inputs.zip",
+    "sha256": "eeac667b420768669f6295a050dd3f389b7978a43556ce58db7ae2351158f3cf"
   }
 }

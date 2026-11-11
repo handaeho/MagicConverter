@@ -1,16 +1,17 @@
 # Third-party components
 
-## Windows installer candidate 2.2.31
+## Windows installer 2.2.31
 
-The installer candidate embeds CPython 3.14.10, 34 pinned Python wheels, Gyan
-FFmpeg and FFprobe 9.0.2, rhwp 0.8.7 and the app-local Microsoft VC runtime.
+The installer embeds CPython 3.14.10, 34 pinned Python wheels, FFmpeg and
+FFprobe 9.0.2 built from source, rhwp 0.8.7 and the app-local Microsoft VC runtime.
 The engine license files and notices are installed under `app/vendor`.
 [Installer notices](../../packaging/public-windows/THIRD_PARTY_NOTICES.txt)
 
-Public installer distribution requires a source review for the shipped native
-builds. The outstanding items include the static FFmpeg codecs, Qt/PySide,
-PyMuPDF/MuPDF and the HEIC wheel's native build inputs, plus redistribution
-evidence for the app-local Microsoft DLLs.
+The [v2.2.31 release](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.31)
+includes the source archives, build inputs, patches and notices for FFmpeg and
+its static codecs, Qt/PySide, PyMuPDF/MuPDF, HEIC and rhwp. The installer displays
+the Microsoft runtime terms. See the [source and build instructions](../release/WINDOWS_INSTALLER_SOURCE.md)
+for details and library replacement instructions.
 
 ## Earlier internal PyInstaller package
 
@@ -95,7 +96,7 @@ mismatched installed versions. New font files, calibre, Ghostscript, ODA,
 MSG/MAPI engines and .NET are not distributed. Font fixtures are generated in
 diagnostics. User font licensing/embedding restrictions remain in effect.
 
-Build inputs for this release: Gyan FFmpeg 9.0.2 full build, including its
+Build inputs for the earlier internal package: Gyan FFmpeg 9.0.2 full build, including its
 original LICENSE and README.txt. The app does not modify the bundled engines.
 
 Stage 9 records all 51 reviewed build/runtime wheels in packaging/python-wheels.json,
