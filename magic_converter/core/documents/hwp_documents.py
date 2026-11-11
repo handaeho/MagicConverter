@@ -1,3 +1,8 @@
+"""Offline HWP v5 text reader and OWPML HWPX/DOCX paragraph/table interchange.
+
+The Python path preserves content and basic text/table structure. It is not a
+page layout engine.
+"""
 
 from __future__ import annotations
 
@@ -52,6 +57,7 @@ class TextRun:
     spacing_pt: float = 0
     proportional_tracking_allowed: bool = True
     page_number: bool = False
+    use_font_space: bool = False
 
 
 @dataclass
@@ -61,6 +67,21 @@ class Picture:
     height: float
     name: str = "image.png"
     crop: tuple[float, float, float, float] = (0, 0, 0, 0)
+
+    @property
+    def text(self) -> str:
+        return ""
+
+
+@dataclass
+class InlineLine:
+    width: float
+    height: float
+    left: float
+    right: float
+    y: float
+    stroke: float
+    color: str = "000000"
 
     @property
     def text(self) -> str:
@@ -82,7 +103,7 @@ class Equation:
 
 @dataclass
 class Paragraph:
-    runs: list[TextRun | Picture | Equation] = field(default_factory=list)
+    runs: list[TextRun | Picture | Equation | InlineLine] = field(default_factory=list)
     alignment: str = "left"
     page_break_before: bool = False
     left_indent: float = 0
@@ -262,11 +283,12 @@ def write_docx(data: DocumentData, destination: Path) -> None:
 
 @bounded_raw
 def write_hwpx(data: DocumentData, destination: Path) -> None:
-    pass
+    """Package OWPML against a licensed, OWPML blank template."""
     template = Path(__file__).resolve().parents[2] / "data" / "hwpx" / "Skeleton.hwpx"
     with zipfile.ZipFile(template) as archive:
         files = {name: archive.read(name) for name in archive.namelist()}
     def serialize(root: ET.Element, seed: bytes) -> bytes:
+        # The format uses the complete root namespace set and standalone XML,
         # even for namespaces not currently used by an element. ElementTree
         # would otherwise drop the unused declarations during serialization.
         namespaces = dict(value for _, value in ET.iterparse(io.BytesIO(seed), events=("start-ns",)))
@@ -315,7 +337,7 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
     def style(run: TextRun) -> str:
         from magic_converter.core.documents.character_spacing import hwpx_spacing
         tracking = hwpx_spacing(run, data.warnings)
-        key = (run.size, run.bold, run.italic, run.color, run.font, tracking, run.width_percent)
+        key = (run.size, run.bold, run.italic, run.color, run.font, tracking, run.width_percent, run.use_font_space)
         if key in style_ids:
             return style_ids[key]
         if run.font not in fonts:
@@ -331,6 +353,7 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
         identifier = str(max(int(c.get("id", "0")) for c in chars) + 1)
         node.set("id", identifier)
         node.set("height", str(round(max(1, run.size) * 100)))
+        node.set("useFontSpace", str(int(run.use_font_space)))
         node.set("textColor", "#" + (run.color if re.fullmatch(r"[0-9A-Fa-f]{6}", run.color) else "000000"))
         for tag in ("bold", "italic"):
             for old in node.findall(q("hh", tag)):
@@ -431,6 +454,11 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
             p.append(first_run)
         from magic_converter.core.documents.character_spacing import metric_segments
         for item in metric_segments(source.runs or [TextRun("")],'hwpx'):
+            if isinstance(item, InlineLine):
+                from magic_converter.core.documents.inline_drawing import write_hwpx_line
+                counter += 1
+                write_hwpx_line(child(p, "run", charPrIDRef=0), item, available, counter + 500000)
+                continue
             if isinstance(item, Equation):
                 from magic_converter.core.documents.document_math import measure
                 width, height, baseline = item.box or measure(item)

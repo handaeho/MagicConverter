@@ -1,3 +1,9 @@
+"""HWP v5 record trees and HWPX objects, including nested tables and pictures.
+
+Binary offsets follow the public HWP 5.0 revision 1.2 specification.
+See data/hwpx/NOTICE for file-format attribution.
+The reader parses records directly and never runs document scripts.
+"""
 
 from __future__ import annotations
 
@@ -19,8 +25,9 @@ from PIL import Image
 from magic_converter.core.conversion.converter import ConversionError
 from magic_converter.core.jobs.raw_api import bounded_raw
 from magic_converter.core.jobs.job_control import check_cancelled
-from magic_converter.core.documents.hwp_documents import (Cell, DocumentData, Paragraph, Picture, Equation, Table, TextRun,
+from magic_converter.core.documents.hwp_documents import (Cell, DocumentData, Paragraph, Picture, Equation, InlineLine, Table, TextRun,
                                MAX_XML, _xml, _section_names, local, q)
+from magic_converter.core.documents.inline_drawing import read_hwpx_line, read_word_line, write_word_line
 from magic_converter.core.documents.table_layout import (EDGES, hwpx_borders, hwpx_margins, word_border, word_border_element,
                                                           word_cell_borders, word_cell_margins)
 
@@ -32,7 +39,7 @@ def walk_blocks(blocks):
             for cell in block.cells:
                 yield from walk_blocks(cell.paragraphs)
         elif isinstance(block, Paragraph):
-            yield from (run for run in block.runs if isinstance(run, (Picture, Equation)))
+            yield from (run for run in block.runs if isinstance(run, (Picture, Equation, InlineLine)))
 
 
 def object_counts(data: DocumentData) -> dict[str, int]:
@@ -139,7 +146,7 @@ def read_hwp_rich(source: Path) -> DocumentData:
             raise ConversionError("HWP 5.x 문서가 아닙니다.")
         flags = struct.unpack_from("<I", header, 36)[0]
         if flags & 6:
-            pass
+            raise ConversionError("암호/배포용 HWP는 보호가 해제된 문서로 변환하세요.")
         compressed = bool(flags & 1)
 
         def stream(path, inflate=True):
@@ -190,7 +197,7 @@ def read_hwp_rich(source: Path) -> DocumentData:
                     with Image.open(io.BytesIO(raw)) as image:
                         pixel_width, pixel_height = image.size
                 except Exception as exc:
-                    pass
+                    raise ConversionError(f"지원하지 않는 HWP 그림입니다: {path[1]}.") from exc
             component = next((n for n in control.descendants() if n.tag == 76 and len(n.data) >= 32), None)
             offset = 28 if component is not None and component.data[:4] == component.data[4:8] else 24
             width, height = struct.unpack_from("<II", component.data, offset) if component and len(component.data) >= offset + 8 else (0, 0)
@@ -340,7 +347,8 @@ def read_hwp_rich(source: Path) -> DocumentData:
                     result.blocks.extend(paragraph(node))
         actual = object_counts(result)
         if actual["tables"] != expected_tables or actual["pictures"] != expected_pictures:
-            pass
+            raise ConversionError(f"HWP 개체를 모두 복원하지 못했습니다 (표 {actual['tables']}/{expected_tables}, "
+                                  f"그림 {actual['pictures']}/{expected_pictures}).")
     return result
 
 
@@ -392,7 +400,10 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                 styles[style.get("id", "0")] = dict(size=max(1, float(style.get("height", "1000")) / 100),
                     bold=style.find(q("hh", "bold")) is not None, italic=style.find(q("hh", "italic")) is not None,
                     color=style.get("textColor", "#000000").lstrip("#"),
+                    use_font_space=style.get("useFontSpace") == "1",
                     font=fonts.get('hangul', {}).get(fontref.get('hangul') if fontref is not None else '0', '맑은 고딕'))
+                if style.get("useKerning", "0") != "0":
+                    styles[style.get("id", "0")]["proportional_tracking_allowed"] = False
                 if fontref is not None:
                     styles[style.get('id', '0')]['_script_fonts'] = {
                         script: fonts[script][identifier] for script, identifier in fontref.attrib.items()
@@ -448,7 +459,7 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                 with Image.open(io.BytesIO(data)) as decoded:
                     w, h = decoded.size
             except Exception as exc:
-                pass
+                raise ConversionError(f"지원하지 않는 HWPX 그림입니다: {name}.") from exc
             size = node.find(q("hp", "sz"))
             width = float(size.get("width", "0")) / 100 if size is not None else 0
             height = float(size.get("height", "0")) / 100 if size is not None else 0
@@ -475,7 +486,7 @@ def read_hwpx_rich(source: Path) -> DocumentData:
             if outline and any(edge.style != "nil" for edge in outline):
                 layout = {**layout, "borders": outline}
             def flush():
-                if any(isinstance(run, Picture) or run.text for run in runs):
+                if any(isinstance(run, (Picture, InlineLine)) or run.text for run in runs):
                     blocks.append(Paragraph(list(runs), alignment, **layout))
                 runs.clear()
             def visit(element, style):
@@ -495,6 +506,14 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                     blocks.append(obj)
                 elif tag == "pic":
                     runs.append(picture(element))
+                elif tag == "line":
+                    line = read_hwpx_line(element)
+                    if line is not None:
+                        runs.append(line)
+                    else:
+                        message = "일부 HWPX 선 도형의 변환은 지원되지 않습니다."
+                        if message not in result.warnings:
+                            result.warnings.append(message)
                 elif tag == "equation":
                     script = next((e.text or "" for e in element if local(e) == "script"), "")
                     from magic_converter.core.documents.document_math import to_omml
@@ -638,7 +657,7 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                 result.blocks.extend(blocks)
         actual = object_counts(result)
         if actual != {"tables": expected_tables, "pictures": expected_pictures}:
-            pass
+            raise ConversionError("HWPX 표·그림을 모두 복원하지 못했습니다.")
     return result
 
 
@@ -672,11 +691,11 @@ def read_docx_rich(source: Path) -> DocumentData:
     character_metrics = WordCharacterMetrics(doc.styles.element, result.warnings)
     if len(doc.sections) > 1:
         result.warnings.append("다중 구역의 서로 다른 용지·여백 설정은 첫 구역 기준으로 변환합니다.")
-    if any(local(node) in {"object", "pict", "AlternateContent", "del", "ins"} for node in doc.element.iter()):
-        result.warnings.append("문서 모델은 일부 포함 개체·VML·호환 개체·변경 추적을 완전히 보존하지 않습니다.")
+    converted_compatibility = set()
 
     def paragraph(p):
         runs = []
+        from magic_converter.core.documents.character_spacing import measured_word_spaces
         from magic_converter.core.documents.document_math import from_omml
         from docx.text.run import Run
         # iter_inner_content omits OMML siblings; visit the XML in document order.
@@ -710,10 +729,15 @@ def read_docx_rich(source: Path) -> DocumentData:
                     continue
                 for child in run._r:
                     if child.tag == qn("w:t"):
-                        runs.append(TextRun(child.text or "", **style))
+                        text = TextRun(child.text or "", **style)
+                        runs.append(replace(text, use_font_space=True) if measured_word_spaces(text) else text)
                     elif child.tag in {qn("w:br"), qn("w:cr"), qn("w:tab")}:
                         runs.append(TextRun("\t" if child.tag == qn("w:tab") else "\n", **style))
                     elif child.tag == qn("w:drawing"):
+                        line = read_word_line(child)
+                        if line is not None:
+                            runs.append(line)
+                            continue
                         extents = child.xpath(".//wp:extent")
                         for blip in child.xpath(".//a:blip"):
                             identifier = blip.get(qn("r:embed"))
@@ -727,6 +751,19 @@ def read_docx_rich(source: Path) -> DocumentData:
                             rects = child.xpath(".//a:srcRect")
                             crop = tuple(int(rects[0].get(n, "0")) / 100000 for n in ("l", "t", "r", "b")) if rects else (0, 0, 0, 0)
                             runs.append(Picture(part.blob, width, height, Path(str(part.partname)).name, crop))
+                        if not child.xpath(".//a:blip"):
+                            message = "일부 Word 그리기 개체는 변환할 수 없어 생략됩니다."
+                            if message not in result.warnings:
+                                result.warnings.append(message)
+                    elif child.tag == "{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent":
+                        for choice in child:
+                            if choice.tag != "{http://schemas.openxmlformats.org/markup-compatibility/2006}Choice" or len(choice) != 1:
+                                continue
+                            line = read_word_line(choice[0]) if choice[0].tag == qn("w:drawing") else None
+                            if line is not None:
+                                runs.append(line)
+                                converted_compatibility.add(child)
+                                break
                     elif local(child) == "oMath":
                         runs.append(from_omml(child))
         if not runs and p._p.pPr is not None:
@@ -792,6 +829,11 @@ def read_docx_rich(source: Path) -> DocumentData:
             if part._has_definition:
                 setattr(result, field, blocks(part))
                 break
+    if any(local(node) in {"object", "pict", "AlternateContent", "del", "ins"}
+           and node not in converted_compatibility
+           and not any(parent in converted_compatibility for parent in node.iterancestors())
+           for node in doc.element.iter()):
+        result.warnings.append("문서 모델은 일부 포함 개체·VML·호환 개체·변경 추적을 완전히 보존하지 않습니다.")
     expected = sum(local(n) == "oMath" for n in doc.element.iter())
     actual = sum(isinstance(n, Equation) for n in walk_blocks(result.blocks))
     if actual < expected:
@@ -848,6 +890,9 @@ def write_docx_rich(data: DocumentData, destination: Path) -> None:
                                                             "w:shd", "w:tabs", "w:spacing", "w:ind", "w:jc")
         from magic_converter.core.documents.character_spacing import metric_segments
         for item in metric_segments(source.runs,'docx'):
+            if isinstance(item, InlineLine):
+                write_word_line(target.add_run(), item, available, target.part.next_id)
+                continue
             if isinstance(item, Equation):
                 from magic_converter.core.documents.document_math import to_omml
                 from docx.oxml import parse_xml
@@ -1004,6 +1049,9 @@ def document_html_rich(data: DocumentData) -> str:
                                       f'width="{round(run.width * scale / .75)}" height="{round(run.height * scale / .75)}">')
                     elif isinstance(run, Equation):
                         output.append('<span>' + html.escape(run.text) + '</span>')
+                    elif isinstance(run, InlineLine):
+                        output.append(f'<hr width="{round(min(available, run.right-run.left) / .75)}" '
+                                      f'size="{max(1, round(run.stroke / .75))}" color="#{run.color}">')
                     else:
                         font_name = {"맑은 고딕": "Malgun Gothic", "돋움": "Dotum", "굴림": "Gulim", "바탕": "Batang"}.get(run.font, run.font)
                         color = run.color if re.fullmatch(r"[0-9A-Fa-f]{6}", run.color) else "000000"

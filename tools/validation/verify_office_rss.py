@@ -15,7 +15,13 @@ def main():
     parser.add_argument('--executable',type=Path);parser.add_argument('--rss-ceiling-mib',type=int,default=1536)
     parser.add_argument('--large',action='store_true',help='Include generated image-heavy DOCX/PPTX inputs')
     args=parser.parse_args();root=args.output.resolve();root.mkdir(parents=True,exist_ok=False)
-    pass
+    report={'status':'running','version':__version__,'cases':[],
+        'executable_sha256':sha(args.executable) if args.executable else None,'generated_large_inputs':args.large,
+        'benchmark_total_rss_ceiling_bytes':args.rss_ceiling_mib*1024**2,
+        'limitations':['Generated Office documents, not user Office corpus certification.',
+          'Sampled working sets can miss short peaks and count shared pages twice.',
+          'Word/Excel/PowerPoint start in a 2 GiB Job before resume, inside the helper aggregate limit. Commit limits are not RSS caps.',
+          'Pre-existing/reused Office servers are never attributed or terminated by this verifier.']}
     def save():(root/'report.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
     save()
     try:

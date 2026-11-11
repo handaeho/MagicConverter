@@ -212,7 +212,7 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
             report["tools"] = check_tools(app, root, image, source, ffmpeg)
             from magic_converter.core.diagnostics.document_diagnostics import check_documents, validate_document_report, DocumentCheckError
             try:
-                report["documents"] = check_documents(root, test_native=test_office)
+                report["documents"] = check_documents(root)
                 validate_document_report(report["documents"])
             except DocumentCheckError as exc:
                 report["documents"] = exc.report
@@ -227,12 +227,11 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
             from docx import Document
             from magic_converter.core.documents.hwp_documents import read_docx, read_hwpx, write_hwpx, write_docx, hwp_records, decode_hwp_text
             from magic_converter.core.engines.office_com import com_apartment
-            pass
             from magic_converter.core.engines.hwp_converter import validate_output
             import struct
             with com_apartment():
                 pythoncom.PumpWaitingMessages()
-            pass
+            original = root / "hwp-source.docx"
             doc = Document()
             doc.add_paragraph("한글 HWPX portable check")
             table = doc.add_table(rows=2, cols=2)
@@ -240,13 +239,13 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
             table.cell(1, 0).merge(table.cell(1, 1)).text = "병합 셀"
             doc.save(original)
             original_data = read_docx(original)
-            pass
+            hwpx = root / "hwp-output.hwpx"
             write_hwpx(original_data, hwpx)
             validate_output(hwpx)
             restored_data = read_hwpx(hwpx)
             if restored_data.text() != original_data.text():
                 raise RuntimeError("HWPX paragraphs/tables were lost")
-            pass
+            roundtrip = root / "hwp-roundtrip.docx"
             write_docx(restored_data, roundtrip)
             if Document(roundtrip).tables[0].cell(1, 1).text != "병합 셀":
                 raise RuntimeError("HWPX merged cells were lost")
@@ -254,16 +253,9 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
             record = struct.pack("<I", 67 | len(payload) << 20) + payload
             if decode_hwp_text(list(hwp_records(record))[0][1]) != "한글 원본 본문":
                 raise RuntimeError("HWP text parser failed")
-            pass
-            pass
-            import hashlib
-            pass
-            module = bundled_module()
-            bundled = module.is_file()
-            if (report["frozen"] and not bundled
-                    or bundled and hashlib.sha256(module.read_bytes()).hexdigest() != MODULE_HASH):
-                pass
-            pass
+            report["hwp"] = {"hwpx_bytes": hwpx.stat().st_size,
+                             "paragraph_table_roundtrip": True, "hwp_text_parser": True,
+                             "pywin32": True, "olefile": olefile.__version__}
             from magic_converter.core.documents.hwp_documents import read_hwp, DocumentData, Paragraph, Picture, Table, Cell, TextRun
             from magic_converter.core.documents.rich_hwp import object_counts
             fixture = Path(__file__).resolve().parents[2] / "data" / "hwp" / "table_picture.hwp"
@@ -278,8 +270,8 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
             counts = object_counts(read_docx(rich_docx))
             if counts != {"tables": 2, "pictures": 1}:
                 raise RuntimeError("Nested table/picture interchange failed")
-            pass
-            pass
+            report["hwp"]["native_objects"] = {"tables": 1, "pictures": 1}
+            report["hwp"]["nested_objects_roundtrip"] = counts
             for suffix in (".heic", ".avif"):
                 target = root / ("image" + suffix)
                 convert_image(image, target, suffix)
@@ -484,7 +476,7 @@ def run_self_test(report_path: Path, test_office: bool = False) -> int:
                 engine = convert_office_pdf(original, office_output, lambda _: None, notices.append)
                 if engine != "office-com":
                     raise RuntimeError("Word pywin32 COM validation used a fallback: " + str(notices))
-                pass
+                report["hwp"]["word_com_pdf_bytes"] = office_output.stat().st_size
                 if not presentation_available():
                     raise RuntimeError("PowerPoint/LibreOffice is required for --self-test-office")
                 rendered = root / "slides-office.pdf"

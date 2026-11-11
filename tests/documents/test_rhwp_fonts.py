@@ -1,30 +1,24 @@
 """Use installed Korean monospace coverage, never a missing default or Latin-only face."""
 from types import SimpleNamespace
+import os
 import unittest
 from unittest.mock import patch
 from pathlib import Path
 import tempfile
-from magic_converter.core.engines.rhwp_engine import fallback_mono
+from magic_converter.core.engines.rhwp_engine import fallback_mono, font_directories
 
 
 class RhwpFontTests(unittest.TestCase):
-    def test_shared_all_faces_are_not_hidden_by_the_hwp_only_directory(self):
-        from magic_converter.core.engines.rhwp_engine import font_directories
-        with tempfile.TemporaryDirectory()as d:
-            pass
-            private=shared/'Hwp';common=shared/'All'
-            for p in(system,private,common):p.mkdir(parents=True)
-            pass
-
-    def test_font_paths_include_private_and_user_faces_without_activation(self):
-        from magic_converter.core.engines.rhwp_engine import font_directories
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d); system = root/'Windows/Fonts'; user = root/'User/Microsoft/Windows/Fonts'
-            pass
-            for p in (system, user, private): p.mkdir(parents=True)
-            pass
-            pass
-            pass
+    def test_font_paths_only_include_system_and_user_fonts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            system_fonts = root / "Windows/Fonts"
+            user_fonts = root / "Local/Microsoft/Windows/Fonts"
+            for folder in (system_fonts, user_fonts):
+                folder.mkdir(parents=True)
+            with patch.dict(os.environ, {"WINDIR": str(root / "Windows"),
+                                        "LOCALAPPDATA": str(root / "Local")}):
+                self.assertEqual(font_directories(), [system_fonts, user_fonts])
 
     def test_pdf_command_passes_each_font_path_and_non_pdf_does_not_discover(self):
         from magic_converter.core.engines import rhwp_engine as engine

@@ -62,7 +62,22 @@ class FreshReportTests(unittest.TestCase):
             executable.write_bytes(b"Not executed; subprocess is fault-injected")
             destination = root / ".test-artifacts/단독 실행 검증"
             destination.mkdir(parents=True)
-            pass
+            (destination / "exe-self-test.json").write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "version": __version__,
+                        "frozen": True,
+                        "documents": {
+                            "portable": {
+                                suffix: {"losses": []}
+                                for suffix in (".hwp", ".hwpx", ".docx", ".pdf")
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
             original_path = list(sys.path)
             try:
                 with patch.object(sys, "argv", [str(script), str(executable)]), patch(

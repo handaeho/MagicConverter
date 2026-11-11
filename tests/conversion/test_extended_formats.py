@@ -110,8 +110,8 @@ class ExtendedFormatTests(unittest.TestCase):
         pdf = slots_for(["test.pdf"], "convert")
         self.assertEqual({slot.action.label for slot in pdf if slot.enabled}, {"DOCX", "PPTX (고정)", "PPTX (편집)", "XLSX", "JPG", "PNG", "EPUB", "TXT", "MD", "CBZ"})
         self.assertFalse(any(slot.action.label == "PAGES" for slot in pdf))
-        pass
-        pass
+        self.assertFalse(any(slot.enabled for slot in slots_for(["deck.ppt"], "convert", presentation_available=False)))
+        self.assertTrue(any(slot.enabled for slot in slots_for(["deck.pptx"], "convert", presentation_available=False)))
 
     def test_pdf_all_pages_300dpi_and_collision_safe_folder(self):
         source = self.pdf()

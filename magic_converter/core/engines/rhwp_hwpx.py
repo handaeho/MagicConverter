@@ -1,3 +1,10 @@
+"""Bounded HWPX compatibility input for rhwp 0.8.7 table pagination.
+
+Some floating tables store a total height smaller than their cell-height sum.
+The pinned renderer can split the spare tail-row height
+row instead. Preserve earlier row boundaries and never shrink stored content.
+The original archive is read only. Ambiguous geometry is left to the engine.
+"""
 from pathlib import Path
 import re
 import zipfile
@@ -194,9 +201,8 @@ def prepare(source: Path, folder: Path):
                 if edits:
                     changed.extend(dict(section=item.filename, **edit) for edit in edits)
         from magic_converter.core.engines.rhwp_roman import available_replacements, normalize
-        from magic_converter.core.engines.rhwp_engine import font_directories
         try:
-            candidate_header, candidate_sections, edits = normalize(header, sections, available_replacements(font_directories()))
+            candidate_header, candidate_sections, edits = normalize(header, sections, available_replacements())
             if len(candidate_header) <= MAX_XML and all(len(data) <= MAX_XML for data in candidate_sections.values()):
                 header, sections = candidate_header, candidate_sections
                 changed.extend(edits)

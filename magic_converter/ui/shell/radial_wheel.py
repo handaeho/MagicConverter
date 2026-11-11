@@ -150,7 +150,8 @@ class RadialWheelWindow(QWidget):
         self.update()
 
     def _slots(self, paths: tuple[Path, ...]) -> tuple[Slot, ...]:
-        pass
+        slots = profile_slots(paths, self.mode, self._drag_preferences, self._ffmpeg_available(),
+                              presentation_available())
         from magic_converter.core.automation.native_drop import has_temporary
         if self.web_inputs or (self._drag_preferences.release_modifier_inside and has_temporary(paths)):
             from magic_converter.core.actions.tool_definitions import COMBINED_ACTIONS

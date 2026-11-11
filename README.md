@@ -96,6 +96,8 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 | 일반 문서 | `.docm` | `.pdf`, `.docx`, `.epub`, `.txt`, `.md`, `.html`, `.hwp`, `.hwpx` | `.jpg`, `.png` | 표준 DOCX로 정규화 · 매크로/실행 객체 제외 |
 | 일반 문서 | `.dotx` | `.pdf`, `.docx`, `.epub`, `.txt`, `.md`, `.html`, `.hwp`, `.hwpx` | `.jpg`, `.png` | 표준 DOCX로 정규화 · 매크로/실행 객체 제외 |
 | 일반 문서 | `.dotm` | `.pdf`, `.docx`, `.epub`, `.txt`, `.md`, `.html`, `.hwp`, `.hwpx` | `.jpg`, `.png` | 표준 DOCX로 정규화 · 매크로/실행 객체 제외 |
+| 한글 문서 | `.hwp` | `.pdf`, `.docx`, `.txt`, `.hwpx` | `.jpg`, `.png`, `.epub`, `.md`, `.html` | rhwp/문서 모델 사용 |
+| 한글 문서 | `.hwpx` | `.pdf`, `.docx`, `.txt`, `.hwp` | `.jpg`, `.png`, `.epub`, `.md`, `.html` | rhwp/문서 모델 사용 |
 | 프레젠테이션 | `.ppt` | `.pdf`, `.jpg`, `.png` | — | PDF/페이지 이미지는 PowerPoint 또는 LibreOffice 필요 |
 | 프레젠테이션 | `.pptx` | `.pdf`, `.jpg`, `.png`, `.pptx`, `.hwp`, `.hwpx` | — | PDF/페이지 이미지는 PowerPoint 또는 LibreOffice 필요 · 표준 PPTX로 정규화 가능 |
 | 프레젠테이션 | `.pptm` | `.pdf`, `.jpg`, `.png`, `.pptx`, `.hwp`, `.hwpx` | — | PDF/페이지 이미지는 PowerPoint 또는 LibreOffice 필요 · 표준 PPTX로 정규화 가능 |
@@ -148,6 +150,7 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 - 같은 확장자도 표에 있으면 재저장·재인코딩·표준 형식 정규화 또는 복사를 지원합니다. `.jpeg`, `.tif`, `.heif`, `.markdown`, `.aif`, `.ndjson`, `.yml`, `.mht`, `.tgz` 등의 입력 별칭도 각각 표에 적었습니다.
 - PDF → PPTX는 **고정 이미지**와 **편집 복원**을 제공합니다. 스캔 문서의 글자는 OCR 없이 편집 텍스트로 복원되지 않으며, PDF → XLSX는 검출된 표·텍스트를 추출합니다.
 - 구조화 자료의 JSONL 출력에는 최상위 배열이, TOML 출력에는 최상위 객체가 필요합니다. CSV/TSV 자료 출력은 같은 열을 가진 객체 배열에 한정됩니다. XML은 자료형 보존용 컨테이너 또는 XML 문서 모델로 처리합니다.
+- 설치 ZIP에는 FFmpeg·FFprobe·rhwp가 포함됩니다. 슬라이드의 PDF/이미지 출력에는 PowerPoint 또는 LibreOffice가, **Excel 인쇄**에는 Microsoft Excel이 필요합니다.
 - 형식 변환 외에 모든 파일은 Ctrl 파일 도구의 **ZIP 압축**으로 묶을 수 있습니다. CLI 추가 대상은 `convert --to wav sample.mp4`처럼 선택하며, PDF → PPTX 모드는 `--action pptx_image` 또는 `--action pptx_editable`로 고릅니다.
 
 프로젝트 코드와 [MagicConverter 아이콘](assets/README.md)은 [AGPL-3.0-or-later](LICENSE)로 공개합니다. <br> 

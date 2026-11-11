@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 from collections import Counter
 
-from magic_converter.core.documents.hwp_documents import DocumentData, Equation, Picture, Table, Paragraph, TextRun
+from magic_converter.core.documents.hwp_documents import DocumentData, Equation, InlineLine, Picture, Table, Paragraph, TextRun
 from magic_converter.core.documents.rich_hwp import walk_blocks
 
 
@@ -42,6 +42,8 @@ def inventory(data: DocumentData) -> dict:
         "tables": [tuple([obj.rows, obj.cols, *sorted((c.row, c.col, c.rowspan, c.colspan) for c in obj.cells)])
                    for obj in objects if isinstance(obj, Table)],
         "pictures": [hashlib.sha256(obj.data).hexdigest() for obj in objects if isinstance(obj, Picture)],
+        "lines": [(round(obj.right - obj.left, 2), round(obj.stroke, 2), obj.color)
+                  for obj in objects if isinstance(obj, InlineLine)],
         "equations": ["".join(obj.script.split()) for obj in objects if isinstance(obj, Equation)],
     }
 
@@ -49,7 +51,7 @@ def inventory(data: DocumentData) -> dict:
 def compare(before: DocumentData, after: DocumentData) -> list[str]:
     a, b = inventory(before), inventory(after)
     warnings = []
-    for key, label in (("tables", "표·병합 구조"), ("pictures", "그림 데이터"), ("equations", "수식 구조")):
+    for key, label in (("tables", "표·병합 구조"), ("pictures", "그림 데이터"), ("lines", "선 도형"), ("equations", "수식 구조")):
         lost = sum((Counter(a[key]) - Counter(b[key])).values())
         if lost:
             warnings.append(f"손실 검사: {label} {lost}개가 원본과 다릅니다 (원본 {len(a[key])}개 / 결과 {len(b[key])}개).")

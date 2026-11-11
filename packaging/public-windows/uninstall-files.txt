@@ -199,6 +199,9 @@ app/magic_converter/core/documents/__pycache__/document_math.cpython-314.pyc
 app/magic_converter/core/documents/__pycache__/hwp_documents.cpython-314.opt-1.pyc
 app/magic_converter/core/documents/__pycache__/hwp_documents.cpython-314.opt-2.pyc
 app/magic_converter/core/documents/__pycache__/hwp_documents.cpython-314.pyc
+app/magic_converter/core/documents/__pycache__/inline_drawing.cpython-314.opt-1.pyc
+app/magic_converter/core/documents/__pycache__/inline_drawing.cpython-314.opt-2.pyc
+app/magic_converter/core/documents/__pycache__/inline_drawing.cpython-314.pyc
 app/magic_converter/core/documents/__pycache__/large_spreadsheet.cpython-314.opt-1.pyc
 app/magic_converter/core/documents/__pycache__/large_spreadsheet.cpython-314.opt-2.pyc
 app/magic_converter/core/documents/__pycache__/large_spreadsheet.cpython-314.pyc
@@ -231,6 +234,7 @@ app/magic_converter/core/documents/document_audit.py
 app/magic_converter/core/documents/document_converter.py
 app/magic_converter/core/documents/document_math.py
 app/magic_converter/core/documents/hwp_documents.py
+app/magic_converter/core/documents/inline_drawing.py
 app/magic_converter/core/documents/large_spreadsheet.py
 app/magic_converter/core/documents/paragraph_layout.py
 app/magic_converter/core/documents/rich_hwp.py

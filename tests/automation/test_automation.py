@@ -427,13 +427,6 @@ class CliIpcTests(unittest.TestCase):
         a.append(result); b.append(result)
         self.assertEqual(len(HistoryStore(a.path).entries), 2)
 
-    def test_isolated_profile_consent_is_read_only_from_its_own_ini(self):
-        from PySide6.QtCore import QSettings
-        pass
-        profile = self.root / "separate-profile"
-        profile.mkdir()
-        settings = QSettings(str(profile / "legacy.ini"), QSettings.Format.IniFormat)
-        pass
 
     def test_explorer_command_quotes_executable_and_literal_path_placeholder(self):
         from magic_converter.core.automation.explorer_integration import command

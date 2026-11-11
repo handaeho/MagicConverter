@@ -19,7 +19,9 @@ failure on nonzero native exits, including early initialization failures.
 Normal stderr on exit 0 is permitted on Windows PowerShell 5 and PowerShell 7.
 Use a fresh checkout: validators deliberately reject reused fixture folders.
 
+These phases run without opting into installed Office automation.
 Optional native tests and their skips are separate from validation on a host
+with licensed Office. Local receipts do not attest remote execution;
 the CI service must retain its actual run/commit record and artifacts.
 
 The source-review bundle is an internal preparation artifact. The GitHub

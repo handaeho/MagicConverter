@@ -87,9 +87,23 @@ class WordCharacterMetrics:
                 result[name] = raw not in {'0', 'false', 'off'}
             elif tag == 'color' and len(raw) == 6:
                 result[name] = raw
+        # Width measured from the font's glyph advances cannot include
+        # Word's optional kerning or contextual substitutions.
+        paragraph_layers = [pprops, *(ppr for _, ppr in para_styles)]
+        kern = next((node for layer in layers if layer is not None
+                     and (node := layer.find(qn('w:kern'))) is not None), None)
+        threshold = kern.get(qn('w:val'), '') if kern is not None else ''
+        unmodeled = _CONTEXTUAL_RUN_LAYOUT | {qn('w:caps'), qn('w:smallCaps')}
+        if ((kern is not None and (not threshold.isdecimal() or int(threshold) <= result.get('size', 10) * 2))
+                or any((node.tag in unmodeled or node.tag.startswith(_WORD_2010))
+                       and node.get(qn('w:val')) not in {'0', 'false', 'off', 'none'}
+                       for layer in layers if layer is not None for node in layer)
+                or any(node.tag in _CONTEXTUAL_PARAGRAPH_LAYOUT
+                       and node.get(qn('w:val')) not in {'0', 'false', 'off'}
+                       for layer in paragraph_layers if layer is not None for node in layer)):
+            result['proportional_tracking_allowed'] = False
         if (run.font.name or '').casefold() == 'tahoma':
             fonts = props.find(qn('w:rFonts'))
-            paragraph_layers = [pprops, *(ppr for _, ppr in para_styles)]
             font_style = _FONT_STYLE | {qn('w:caps')} if any('a' <= c <= 'z' for c in run.text) else _FONT_STYLE
             # The verified case uses a named, regular face and direct size in
             # left-to-right paragraphs with no unmodeled layout modifiers.

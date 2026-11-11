@@ -41,4 +41,3 @@ rhwp source: https://github.com/edwardkim/rhwp/tree/v0.8.7
 The app-local Microsoft Visual C++ runtime is distributed separately from the
 open-source license grants. The Microsoft runtime terms are displayed by
 the installer and included in app/licenses/Microsoft-VC-Runtime-2026.txt.
-

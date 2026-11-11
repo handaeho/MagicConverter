@@ -46,7 +46,7 @@ class FileQueueTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        pass
+        self.catalog = create_catalog(ffmpeg_available=False, presentation_available=False)
         self.catalog_patch = patch("magic_converter.core.conversion.builtin_converters.runtime_catalog", side_effect=lambda _: self.catalog)
         self.catalog_patch.start()
         self.services = []

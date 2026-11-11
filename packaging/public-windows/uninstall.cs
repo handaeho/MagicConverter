@@ -7,7 +7,6 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -86,7 +85,7 @@ internal static class Uninstaller
         var shortcut = Path.Combine(programs, "MagicConverter.lnk");
         var kept = new List<string>();
         var lockPath = Path.Combine(root, ".setup.lock");
-        foreach (var path in new[] { root, installed, marker, token, profile, copyFolder, copy, shortcut, lockPath })
+        foreach (var path in new[] { root, installed, marker, token, profile, shortcut, lockPath })
             RequirePlainPath(path);
         var current = Assembly.GetExecutingAssembly().Location;
         if (Below(current, installed) || Below(current, profile))
@@ -111,17 +110,9 @@ internal static class Uninstaller
 
             RemoveShortcut(shortcut, gui);
             foreach (var hive in userHives)
-                RemoveRegistry(hive, gui, copy);
+                RemoveRegistry(hive, gui);
 
             RemoveProfile(profile, kept);
-            if (File.Exists(copy))
-            {
-                    File.Delete(copy);
-                else
-                    kept.Add(copyFolder);
-            }
-            RemoveEmpty(copyFolder);
-            RemoveEmpty(Path.GetDirectoryName(copyFolder));
             RemoveEmpty(Path.Combine(local, "magic_converter"));
 
             if (File.Exists(marker))
@@ -217,7 +208,7 @@ internal static class Uninstaller
             File.Delete(path);
     }
 
-    private static void RemoveRegistry(RegistryKey hive, string gui, string copy)
+    private static void RemoveRegistry(RegistryKey hive, string gui)
     {
         hive.DeleteSubKeyTree(@"Software\magic_converter\magic_converter", false);
         const string settings = @"Software\magic_converter";
@@ -272,12 +263,6 @@ internal static class Uninstaller
         catch (InvalidOperationException) { return false; }
     }
 
-    private static string Hash(string path)
-    {
-        using (var stream = File.OpenRead(path))
-        using (var sha = SHA256.Create())
-            return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
-    }
 
     private static bool Below(string path, string parent)
     {

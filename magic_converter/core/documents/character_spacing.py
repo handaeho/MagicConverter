@@ -20,6 +20,18 @@ _TAHOMA_KERN_PAIRS = frozenset(map(tuple, (
     'Ve Vo Vu We Wo Wr Wu Xe Xo Xu Yd Ye Yg Ym Yn Yo Yp Yr Ys Yu Ze Zo eT rd re rg ro'
 ).split()))
 
+# DOCX fixed tracking with kerning and contextual shaping disabled. Measure
+# only these installed faces and keep Word's original text and font size.
+_WORD_FACE_NAMES = {"바탕": "Batang", "batang": "Batang",
+                    "맑은 고딕": "Malgun Gothic", "malgun gothic": "Malgun Gothic"}
+_WORD_TRACKING_FACES = {
+    ("Batang", False): (40, "51d9a8d4205239c865e24b6eb7e6e6dbacfd59c3e2c46f623db0af45e169c9d8", frozenset(" ")),
+    ("Malgun Gothic", True): (
+        0, "e8cbc0b2afcc14fb45dfb6086d5102c0b23a96e7b6e708f3122acde1b86c9082",
+        frozenset(ascii_uppercase + ascii_uppercase.lower() + digits + " .-/□"),
+    ),
+}
+
 
 def _proportional_run(run):
     return (bool(run.font) and run.font.casefold() == 'tahoma' and run.proportional_tracking_allowed
@@ -31,13 +43,13 @@ def _kerning_free(characters):
     return all(pair not in _TAHOMA_KERN_PAIRS for pair in pairwise(characters))
 
 
-@lru_cache(maxsize=4)
-def _verified_tahoma(path, size, modified_ns):
+@lru_cache(maxsize=8)
+def _font_digest(path, size, modified_ns):
     with path.open('rb') as stream:
-        return file_digest(stream, 'sha256').hexdigest() == _TAHOMA_SHA256
+        return file_digest(stream, 'sha256').hexdigest()
 
 
-def glyph_advances(run, *, allow_proportional=True):
+def glyph_advances(run, *, allow_proportional=True, allow_word_faces=False):
     # Combining/RTL/contextual shaping and scaled runs still need a richer model.
     text = run.text
     if not text or len(text) > 16384 or run.width_percent != 100 or not math.isfinite(run.size) or run.size <= 0:
@@ -45,10 +57,14 @@ def glyph_advances(run, *, allow_proportional=True):
     characters = set(text)
     hangul = {c for c in characters if 0xAC00 <= ord(c) <= 0xD7A3}
     ascii_text = characters - hangul
-    if ascii_text and (run.bold or run.italic or any(not ' ' <= c <= '~' for c in ascii_text)):
+    word_family = _WORD_FACE_NAMES.get(run.font.casefold())
+    word_profile = _WORD_TRACKING_FACES.get((word_family, run.bold))
+    word_verified = (allow_word_faces and bool(ascii_text) and word_profile is not None and not run.italic
+                     and run.proportional_tracking_allowed and word_profile[2].issuperset(ascii_text))
+    if ascii_text and not word_verified and (run.bold or run.italic or any(not ' ' <= c <= '~' for c in ascii_text)):
         return None
     proportional = allow_proportional and bool(ascii_text) and _proportional_run(run) and _kerning_free(text)
-    expected_face = 'Tahoma' if proportional else _MIXED_WIDTH_FACES.get(run.font.casefold())
+    expected_face = word_family if word_verified else ('Tahoma' if proportional else _MIXED_WIDTH_FACES.get(run.font.casefold()))
     if ascii_text and expected_face is None:
         return None
     from magic_converter.core.pdf.pdf_fonts import resolve_font, font_metrics
@@ -58,12 +74,13 @@ def glyph_advances(run, *, allow_proportional=True):
     if ascii_text and face.family != expected_face:
         return None
     try:
-        if proportional:
+        if proportional or word_verified:
             stat = face.path.stat()
-            if face.offset != 0 or not _verified_tahoma(face.path, stat.st_size, stat.st_mtime_ns):
+            offset, digest = word_profile[:2] if word_verified else (0, _TAHOMA_SHA256)
+            if face.offset != offset or _font_digest(face.path, stat.st_size, stat.st_mtime_ns) != digest:
                 return None
         font = font_metrics(face)
-        if ascii_text and not proportional and not font.flags.get('mono'):
+        if ascii_text and not (proportional or word_verified) and not font.flags.get('mono'):
             return None
         values = {}
         for c in characters:
@@ -73,7 +90,7 @@ def glyph_advances(run, *, allow_proportional=True):
             advance = font.glyph_advance(ord(c))
             # These installed faces are verified with ASCII halfwidth and
             # precomposed Hangul fullwidth, with no proportional substitution.
-            if ascii_text and not proportional and advance != (.5 if c in ascii_text else 1):
+            if ascii_text and not (proportional or word_verified) and advance != (.5 if c in ascii_text else 1):
                 return None
             values[c] = advance * run.size
         if any(not math.isfinite(value) or value <= 0 for value in values.values()):
@@ -91,6 +108,13 @@ def uniform_advance(run):
     # even when a particular run contains only one repeated character.
     values=glyph_advances(run, allow_proportional=False)
     return values[0]if values and max(values)-min(values)<=1e-6 else None
+
+
+def measured_word_spaces(run):
+    if ' ' not in run.text or (_WORD_FACE_NAMES.get(run.font.casefold()), run.bold) not in _WORD_TRACKING_FACES:
+        return False
+    from dataclasses import replace
+    return bool(glyph_advances(replace(run, text=' '), allow_proportional=False, allow_word_faces=True))
 
 
 def metric_segments(runs,target):
@@ -116,7 +140,7 @@ def metric_segments(runs,target):
         requested=run.spacing_percent if target=='docx'else run.spacing_pt
         if not requested or target=='docx'and run.spacing_pt:
             yield run;continue
-        advances=glyph_advances(run, allow_proportional=proportional)
+        advances=glyph_advances(run, allow_proportional=proportional, allow_word_faces=target == 'hwpx')
         if advances is None:
             error=0;yield run;continue
         parts=[];pending='';previous=None;balance=error
@@ -136,9 +160,10 @@ def metric_segments(runs,target):
             error=0;yield run;continue
         if pending:parts.append((pending,previous))
         error=balance
+        font_space = run.use_font_space or (target == 'hwpx' and measured_word_spaces(run))
         for text,value in parts:
             yield replace(run,text=text,spacing_pt=value if target=='docx'else 0,
-                          spacing_percent=value if target=='hwpx'else 0)
+                          spacing_percent=value if target=='hwpx'else 0, use_font_space=font_space)
 
 
 def metric_characters(run):
@@ -147,7 +172,7 @@ def metric_characters(run):
         return [(c,'pt',run.spacing_pt,run.width_percent)for c in run.text]
     if not run.spacing_percent:
         return [(c,'pt',0,run.width_percent)for c in run.text]
-    advances=glyph_advances(run)
+    advances=glyph_advances(run, allow_word_faces=True)
     if advances is None:return [(c,'percent',run.spacing_percent,run.width_percent)for c in run.text]
     return [(c,'pt',advance*run.spacing_percent/100,run.width_percent)for c,advance in zip(run.text,advances)]
 

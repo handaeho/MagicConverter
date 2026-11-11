@@ -51,7 +51,6 @@ class TrayIcon(QSystemTrayIcon):
         self._history_store = None
         self._preferences = default_preferences()
         self._settings_store = None
-        pass
 
     def _toggle_enabled(self, enabled: bool) -> None:
         self.values["enabled"] = enabled
@@ -112,7 +111,8 @@ class TrayIcon(QSystemTrayIcon):
             self._settings_dialog.raise_()
             self._settings_dialog.activateWindow()
             return
-        pass
+        dialog = SettingsDialog(self.values,
+                                preferences=self._preferences, settings_store=self._settings_store)
         self._settings_dialog = dialog
         dialog.quit_requested.connect(self.quit_requested.emit)
 

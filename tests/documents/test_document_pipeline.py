@@ -127,7 +127,12 @@ class DocumentStage5Tests(unittest.TestCase):
         self.assertEqual(len(warnings), 4)
         self.assertTrue(all("손실 검사" in value for value in warnings))
 
-    pass
+    @unittest.skipUnless(rhwp_engine.locate(), "Bundled rhwp unavailable; run tools/dependencies/fetch_rhwp.py")
+    def test_real_hwp_roundtrip_and_pdf_render(self):
+        with patch("magic_converter.core.engines.hwp_converter.run_com", side_effect=AssertionError("native called")):
+            report = check_documents(self.root)
+        self.assertEqual(report["portable"][".hwp"]["losses"], [])
+        self.assertEqual(report["portable"][".pdf"]["render"], "passed")
 
     def test_all_eleven_office_variants_have_real_package_output(self):
         word = self.root / "word.docx"
@@ -173,16 +178,16 @@ class DocumentStage5Tests(unittest.TestCase):
                 self.assertTrue(notices)
 
     def test_engine_availability_matches_custom_and_automatic_wheels(self):
-        pass
-        pass
+        no_engines = create_catalog(rhwp_available=False)
+        available = create_catalog(rhwp_available=True)
         self.assertIsNone(no_engines.assess("source.hwpx", "document:hwp").route)
         self.assertIsNotNone(available.assess("source.hwpx", "document:hwp").route)
         preferences = replace(Preferences(), presets=(Preset("hwp", "HWP", "document:hwp"),),
                               profiles=(WheelProfile("hwp", "HWP", "convert", ("hwp",)),), convert_profile="hwp")
         for rhwp in (False, True):
-            pass
+            slots = profile_slots(["source.dotm"], "convert", preferences, rhwp=rhwp)
             self.assertEqual(slots[0].enabled, rhwp)
-            pass
+            standard = slots_for(["source.dotm"], "convert", rhwp_available=rhwp)
             self.assertEqual(next(s.enabled for s in standard if s.action.key == "document:hwp"), rhwp)
 
     def test_rhwp_timeout_cancel_and_failure_do_not_publish_a_file(self):
@@ -191,7 +196,7 @@ class DocumentStage5Tests(unittest.TestCase):
         for error in (JobCancelled(), JobTimedOut("timed out")):
             with self.subTest(error=type(error).__name__), patch.object(rhwp_engine, "run_process", side_effect=error):
                 with self.assertRaises(type(error)):
-                    convert_hwp(source, self.root / "cancelled.hwp", lambda _: None, prefer_native=False)
+                    convert_hwp(source, self.root / "cancelled.hwp", lambda _: None)
                 self.assertFalse((self.root / "cancelled.hwp").exists())
         self.assertGreater(rhwp_engine.time_limit(source), 120)
         self.assertTrue(rhwp_engine.shaping_required("العربية"))
@@ -231,30 +236,7 @@ class DocumentStage5Tests(unittest.TestCase):
             self.assertNotIn(b"rIdRemoved", z.read("word/_rels/document.xml.rels"))
         self.assertEqual(len(Document(target).paragraphs), 0)
 
-    def test_native_and_model_paths_report_independent_equivalent_objects(self):
-        source = self.root / "native-source.docx"
-        write_docx(self.fixture(), source)
-        def native_export(source, destination, operation):
-            pass
-            write_hwpx(read_content(source), destination)
-        for native in (True, False):
-            output = self.root / f"native-{native}.hwpx"
-            pass
-            self.assertEqual(helper.call_count, int(native))
-            self.assertEqual(compare(read_docx(source), read_hwpx(output)), [])
 
-    def test_detected_native_math_loss_retries_model_instead_of_publishing_it(self):
-        source = self.root / "lost-formula.docx"
-        write_docx(self.fixture(), source)
-        def losing_native(source, destination, operation):
-            data = read_content(source)
-            data.blocks[0].runs = [r for r in data.blocks[0].runs if not isinstance(r, Equation)]
-            write_hwpx(data, destination)
-        messages = []
-        output = self.root / "recovered.hwpx"
-        pass
-        self.assertEqual(compare(read_docx(source), read_hwpx(output)), [])
-        self.assertTrue(any("손실 검사" in message for message in messages))
 
     def test_office_state_replace_retries_only_temporary_permission_errors(self):
         from magic_converter.core.engines.office_com import _save_json
@@ -283,7 +265,7 @@ class DocumentStage5Tests(unittest.TestCase):
         wb.active.add_image(SheetImage(image), "A3")
         wb.save(source)
         output = self.root / "model-sheet.hwpx"
-        convert_hwp(source, output, lambda _: None, prefer_native=False)
+        convert_hwp(source, output, lambda _: None)
         restored = read_hwpx(output)
         self.assertEqual(len(inventory(restored)["pictures"]), 1)
         table = next(b for b in restored.blocks if isinstance(b, Table))
@@ -296,7 +278,7 @@ class DocumentStage5Tests(unittest.TestCase):
         source = self.root / "model-slide.pptx"
         deck.save(source)
         output = self.root / "model-slide.hwpx"
-        convert_hwp(source, output, lambda _: None, prefer_native=False)
+        convert_hwp(source, output, lambda _: None)
         restored = read_hwpx(output)
         self.assertEqual(len(inventory(restored)["pictures"]), 1)
         table = next(b for b in restored.blocks if isinstance(b, Table))
@@ -307,13 +289,12 @@ class DocumentStage5Tests(unittest.TestCase):
         source = self.root / "recipe.docx"
         write_docx(self.fixture(), source)
         source = self.variant(source, ".docm")
-        pass
+        catalog = create_catalog(rhwp_available=True)
         request = prepare_request([source], "document:hwp", catalog)
         worker = ConversionWorker(51, request.paths, request.action, None, request=request)
         results = []
         worker.signals.finished.connect(results.append)
-        with patch("magic_converter.core.engines.hwp_converter.automation_enabled", return_value=False):
-            worker.run()
+        worker.run()
         self.assertFalse(results[0].errors)
         validate_output(results[0].outputs[0])
         self.assertTrue(any("매크로" in message for message in results[0].warnings))

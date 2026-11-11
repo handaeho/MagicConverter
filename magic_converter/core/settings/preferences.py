@@ -167,7 +167,6 @@ class Preferences:
     interval_ms: int = 35
     threshold: int = 15
     ffmpeg_path: str = ""
-    pass
     presets: tuple[Preset, ...] = ()
     profiles: tuple[WheelProfile, ...] = ()
     convert_profile: str = ""
@@ -177,7 +176,8 @@ class Preferences:
     release_modifier_inside: bool = False
 
     def __post_init__(self):
-        pass
+        if any(type(value) is not bool for value in (self.enabled, self.release_modifier_inside)):
+            raise SettingsError("사용 여부 값이 올바르지 않습니다.")
         _integer(self.interval_ms, "감지 주기", 30, 50)
         _integer(self.threshold, "드래그 거리", 5, 80)
         _integer(self.history_limit, "기록 보관 수", 0, 1000)
@@ -196,7 +196,7 @@ class Preferences:
                 raise SettingsError("선택한 휠 프로필을 찾을 수 없습니다.")
 
     def base_values(self):
-        pass
+        return {key: getattr(self, key) for key in ("enabled", "interval_ms", "threshold", "ffmpeg_path")}
 
     def to_dict(self):
         return {"version": SCHEMA_VERSION, **asdict(self)}

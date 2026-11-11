@@ -1,4 +1,4 @@
-"""Prove injected native errors fail the top-level self-test, retaining evidence."""
+"""Prove injected document errors fail the top-level self-test, retaining evidence."""
 
 import argparse
 import json
@@ -17,8 +17,13 @@ def main():
     from magic_converter.core.diagnostics.document_diagnostics import check_documents
     from magic_converter.core.diagnostics.diagnostics import run_self_test
 
-    def injected(root, *, test_native=False):
-        pass
+    from magic_converter.core.diagnostics.document_diagnostics import validate_document_report
+
+    def injected(root):
+        report = check_documents(root)
+        report["portable"][".docx"]["error"] = "Injected document conversion failure"
+        validate_document_report(report)
+        return report
 
     with patch(
         "magic_converter.core.diagnostics.document_diagnostics.check_documents",
@@ -29,15 +34,15 @@ def main():
     documents = report.get("documents", {})
     errors = [
         v.get("error")
-        for v in documents.get("native", {}).values()
+        for v in documents.get("portable", {}).values()
         if isinstance(v, dict)
     ]
     passed = (
         code == 1
         and report.get("status") == "failed"
         and documents.get("status") == "failed"
-        and len(errors) == 4
-        and all(e == "Injected native conversion failure" for e in errors)
+        and bool(errors)
+        and all(e == "Injected document conversion failure" for e in errors)
     )
     print(
         json.dumps(
@@ -45,7 +50,7 @@ def main():
                 "gate_verification": "passed" if passed else "failed",
                 "self_test_exit": code,
                 "self_test_status": report.get("status"),
-                "native_errors": errors,
+                "document_errors": errors,
                 "report": str(args.report.resolve()),
             },
             ensure_ascii=False,

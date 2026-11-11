@@ -214,29 +214,6 @@ def main():
             ratio=round(body_bytes / amplified.stat().st_size, 2),
             note="Bounded repeated-reference probe; body and unique asset bytes are reported separately. Not a process-RSS measurement.",
         )
-        from magic_converter.core.engines.rhwp_engine import locate
-
-        if locate():
-            from magic_converter.core.diagnostics.document_diagnostics import (
-                check_documents,
-                DocumentCheckError,
-            )
-
-            native_root = root / "native-gate"
-            native_root.mkdir()
-            pass
-            errors = {
-                kind: value.get("error")
-                for kind, value in result["native"].items()
-                if isinstance(value, dict) and value.get("error")
-            }
-            record(
-                "NATIVE_COMPARISON_ERROR_NOT_RAISED",
-                len(errors) == 4 and returned_normally,
-                native_errors=errors,
-                returned_normally=returned_normally,
-                note="Offline rhwp checks are real. Only the native comparison call is fault-injected; no COM app is launched by this probe. A strict gate must raise and retain all native error details.",
-            )
         app.processEvents()
 
     commit = subprocess.check_output(

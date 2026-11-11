@@ -137,7 +137,13 @@ def review(release,repo,expected_commit,output,workspace_source=None,crate_cache
         report['runtime_packages']=[{'name':p['name'],'version':p.get('versionInfo'),'license_declared':p.get('licenseDeclared')}
                                    for p in json.loads((release/'sbom.spdx.json').read_text(encoding='utf-8'))['packages']
                                    if any(token in p['name'].lower()for token in('pymupdf','pyside','shiboken','ffmpeg','rhwp'))]
-        pass
+        report['blockers']={
+            'project':'Project license/approval remains undecided; no policy fields changed',
+            'pymupdf':'Select/review applicable terms and collect matching MuPDF/native/transitive sources and build material',
+            'qt':'Registered official matching-version archives and publisher checksums are verified when supplied, including separate QtPdf6.140.0. Actual wheel patches/build correspondence, module-specific rights and rebuild/relink/installation evidence remain unestablished',
+            'ffmpeg':'Collect exact external codec/library revisions, patches and build scripts; root n9.0.2/configure flags alone are insufficient',
+            'rhwp':'Partial snapshot omits workspace closure, vendor/svg2pdf patches/assets and transitive sources; match source commit/features to shipped binary before claiming correspondence',
+            'runtime':'Review Microsoft runtime redistribution evidence'}
         if workspace_source is not None:
             report['blockers']['rhwp']='Selected workspace/vendor/assets Git blobs and locked registry archives plus declared recipe/Rust version/defaults verified; actual compiler/SDK/features, dynamic inputs, native rebuild and shipped-binary correspondence still unestablished'
         if (native_build_receipt is None)!=(native_build_archive is None):raise ValueError('Native receipt/archive must be supplied together')

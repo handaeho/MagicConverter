@@ -63,7 +63,12 @@ def main():
     p.add_argument('--executable',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--rss-ceiling-mib',type=int,default=1536)
     a=p.parse_args();root=a.output.resolve();root.mkdir(parents=True,exist_ok=False)
-    pass
+    report={'status':'running','version':__version__,'executable_sha256':sha(a.executable),
+        'input_kind':'actual user-provided Desktop OOXML','inputs':[],'cases':[],
+        'limitations':['Read-only structural/resource checks, not pixel-perfect rendering certification.',
+            '25ms working-set samples can miss short peaks and double-count shared pages.',
+            'Word/Excel/PowerPoint launch under the helper aggregate commit limit and a separate 2 GiB startup Job.',
+            'DOCX/XLSX corpus sizes are reported exactly; large PPTX does not certify large DOCX/XLSX.']}
     def save():(root/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     save()
     previous={k:os.environ.get(k) for k in ('TMP','TEMP','PYTHONUTF8')}

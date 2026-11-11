@@ -15,7 +15,9 @@ class SourceReviewSelectionTests(unittest.TestCase):
             self.assertTrue(selected(name), name)
 
     def test_native_binaries_credentials_and_user_documents_are_excluded(self):
-        pass
+        for name in ('vendor/other/native.dll','vendor/rhwp/rhwp.exe',
+                     '.aws/credentials','.env','private-user-doc.hwpx','.git/config','dist/current/magic_converter.exe'):
+            self.assertFalse(selected(name),name)
 
 
 if __name__=='__main__':unittest.main()

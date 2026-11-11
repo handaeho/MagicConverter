@@ -19,6 +19,7 @@ from pypdf import PdfReader, PdfWriter
 from magic_converter.core.conversion.builtin_converters import create_catalog
 from magic_converter.core.conversion.conversion_execution import execute_file
 from magic_converter.core.conversion.conversion_request import prepare_request
+from magic_converter.core.engines import hwp_converter as hwp_converter
 from magic_converter.core.engines.office_process import run_helper
 from magic_converter.core.jobs import specialized_worker as worker
 from magic_converter.core.jobs.job_control import Control, current, JobCancelled, JobTimedOut
@@ -30,7 +31,6 @@ import sys
 from magic_converter.core.engines import hwp_converter as h,office_engine,rhwp_engine
 from magic_converter.core.jobs.specialized_worker import helper_main
 h.com_available=lambda _:True
-h.automation_enabled=lambda:False
 office_engine.find_libreoffice=lambda:None
 rhwp_engine.locate=lambda:None
 '''
@@ -61,12 +61,14 @@ class OfficeWorkerTests(unittest.TestCase):
     def test_broker_keeps_native_export_in_parent_and_forwards_failure_to_fallback(self):
         program = BOOTSTRAP + "raise SystemExit(helper_main(sys.argv[1],sys.argv[2]))"
         notices = []
-        pass
+        with self.command(program), patch.object(hwp_converter, "run_com", side_effect=self.export) as native:
+            output = self.convert(notices=notices)
         self.assertEqual(native.call_count, 1)
         self.assertEqual(len(PdfReader(output).pages), 1)
         self.assertTrue(any(s.startswith("PDF 구조 검사:") for s in notices))
         output.unlink()
-        pass
+        with self.command(program), patch.object(hwp_converter, "run_com", side_effect=RuntimeError("native failure")):
+            output = self.convert(notices=notices)
         self.assertEqual(len(PdfReader(output).pages), 1)
         self.assertTrue(any("실패" in s for s in notices))
         self.assertEqual(self.source.read_bytes(), self.original)
@@ -98,7 +100,8 @@ raise SystemExit(helper_main(sys.argv[1],sys.argv[2]))
                         else: control.event.set()
                     signal = threading.Thread(target=interrupt); signal.start()
                     try:
-                        pass
+                        with self.command(program), patch.object(hwp_converter, "run_com", side_effect=self.export), self.assertRaises(JobTimedOut if timeout else JobCancelled):
+                            self.convert(key)
                     finally:
                         signal.join(16); current.reset(token)
                     self.assertTrue(ready.is_file(), "Did not enter the actual library stub")
@@ -144,7 +147,8 @@ time.sleep(30)
                     else: control.event.set()
                 signal = threading.Thread(target=interrupt); signal.start()
                 try:
-                    pass
+                    with self.command(program), patch.object(hwp_converter, "run_helper", side_effect=supervise), self.assertRaises(JobTimedOut if timeout else JobCancelled):
+                        self.convert()
                     self.assertTrue(ready.is_file())
                     server.wait(timeout=3)
                     self.assertIsNone(unrelated.poll())
@@ -163,8 +167,18 @@ time.sleep(30)
         folder = self.root / "worker"; folder.mkdir(); (folder / "native").mkdir(); (folder / "output").mkdir()
         original = self.source; run_id = "current-run"; handled = set()
         good = {"run_id": run_id, "source": str(original), "destination": str(folder / "output/result.pdf"), "operation": "office_pdf"}
-        pass
-        pass
+        cases = [good, {**good, "run_id": "stale"}, {**good, "source": str(self.root / "outside")},
+                 {**good, "destination": str(self.root / "outside.pdf")}, {**good, "operation": "unknown_operation"}]
+        with patch.object(hwp_converter, "run_com", side_effect=self.export) as native:
+            for index, value in enumerate(cases):
+                identity = uuid.uuid4().hex
+                write_json(folder / "native" / (identity + ".request.json"), value)
+                if index:
+                    with self.assertRaises(ValueError): handle_request(folder, run_id, original, identity, handled)
+                else:
+                    handle_request(folder, run_id, original, identity, handled)
+                    with self.assertRaises(ValueError): handle_request(folder, run_id, original, identity, handled)
+            self.assertEqual(native.call_count, 1)
         self.assertFalse((self.root / "outside.pdf").exists())
 
     def test_new_archive_and_subtitle_routes_preserve_empty_folder_and_normal_output(self):

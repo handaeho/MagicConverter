@@ -9,8 +9,7 @@
 
 Windows 10·11 64비트에서 같은 설치 파일을 사용합니다. 인터넷 연결이나 관리자 권한 없이 설치할 수 있습니다. 설치 오류는 `%LOCALAPPDATA%\Programs\MagicConverter\setup-2.2.35.log`에서 확인할 수 있습니다. [제거 안내](UNINSTALL_WINDOWS.md)
 
-
-
+동영상·오디오 변환에는 함께 설치된 FFmpeg·FFprobe를 사용합니다. HWP·HWPX 변환은 rhwp와 앱의 자체 변환기로 실행합니다. Excel 인쇄와 Office 자동화는 PC에 설치된 해당 프로그램을 사용합니다.
 
 ## CLI로 시작하기
 

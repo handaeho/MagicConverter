@@ -299,73 +299,14 @@ class PackagingRegressionTests(unittest.TestCase):
 
 
 @unittest.skipUnless(locate(), "Bundled rhwp required for real document diagnostics")
-class NativeGateRegressionTests(Fixtures):
-    def native_patches(self):
-        pass
-        pass
-
-    def test_native_errors_fail_with_all_subtest_details_retained(self):
-        self.native_patches()
-        with patch(
-            "magic_converter.core.engines.hwp_converter.run_com",
-            side_effect=RuntimeError("Injected native failure"),
-        ) as helper:
-            with self.assertRaises(DocumentCheckError) as raised:
-                check_documents(self.root, test_native=True)
-        report = raised.exception.report
-        self.assertEqual(helper.call_count, 4)
-        self.assertEqual(report["status"], "failed")
-        self.assertEqual(len(report["validation_errors"]), 4)
-        self.assertTrue(
-            all(
-                "Injected native failure" in n["error"]
-                for n in report["native"].values()
-            )
-        )
-
-    def test_structural_loss_and_missing_comparisons_cannot_pass(self):
-        self.native_patches()
-        from magic_converter.core.documents.hwp_documents import (
-            DocumentData,
-            Paragraph,
-            TextRun,
-            write_docx,
-        )
-
-        def export(source, destination, operation):
-            if destination.suffix == ".docx":
-                write_docx(
-                    DocumentData([Paragraph([TextRun("Missing objects")])]), destination
-                )
-            else:
-                shutil.copy2(
-                    self.root / ("rhwp-result" + destination.suffix), destination
-                )
-
-        with patch("magic_converter.core.engines.hwp_converter.run_com", side_effect=export):
-            with self.assertRaises(DocumentCheckError) as raised:
-                check_documents(self.root, test_native=True)
-        report = raised.exception.report
-        self.assertTrue(report["native"][".docx"]["differences"])
-        self.assertTrue(any("native .docx" in n for n in report["validation_errors"]))
-        for mutate in (
-            lambda r: r["native"].pop(".hwp"),
-            lambda r: r["native"][".hwpx"].pop("differences"),
-            lambda r: r["native"][".pdf"].pop("pdf"),
-        ):
-            candidate = copy.deepcopy(report)
-            candidate["native"][".docx"]["differences"] = []
-            mutate(candidate)
-            with self.assertRaises(DocumentCheckError):
-                validate_document_report(candidate)
-
-    def test_explicitly_unavailable_or_disabled_native_check_is_a_valid_skip(self):
-        pass
-        self.assertFalse(result["native_required"])
-        self.assertEqual(result["native"]["status"], "skipped")
-        self.assertEqual(result["status"], "passed")
+class PortableDocumentGateTests(unittest.TestCase):
+    def test_missing_or_lossy_result_fails_the_gate(self):
+        from magic_converter.core.diagnostics.document_diagnostics import DocumentCheckError, validate_document_report
+        report = {"portable": {".hwp": {"losses": ["missing table"]},
+                               ".pdf": {"render": "passed"}, ".docx": {"losses": []}}}
         with self.assertRaises(DocumentCheckError):
-            validate_document_report({"status": "passed"})
+            validate_document_report(report)
+        self.assertEqual(len(report["validation_errors"]), 2)
 
 
 if __name__ == "__main__":

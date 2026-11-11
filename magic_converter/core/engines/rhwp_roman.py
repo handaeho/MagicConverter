@@ -1,3 +1,4 @@
+"""Use verified system glyphs for missing Roman numerals in HWPX text runs."""
 from copy import deepcopy
 import re
 import struct
@@ -13,10 +14,30 @@ SLOTS = ('hangul', 'latin', 'hanja', 'japanese', 'other', 'symbol', 'user')
 ROMANS = '\u216a\u216b'
 
 
-def available_replacements(directories):
-    from magic_converter.core.pdf.pdf_fonts import resolve_font, font_metrics, _faces, font_key
+def available_replacements():
+    from magic_converter.core.pdf.pdf_fonts import font_metrics, resolve_font
+
     result = {}
-    pass
+    for original in ('굴림', '휴먼명조'):
+        check_cancelled()
+        try:
+            base = resolve_font(original)
+            if base is None:
+                continue
+            metrics = font_metrics(base)
+            missing = {char for char in ROMANS if not metrics.has_glyph(ord(char))}
+            if not missing:
+                continue
+            for name in ('맑은 고딕', 'Segoe UI Symbol'):
+                face = resolve_font(name)
+                if face is None:
+                    continue
+                replacement = font_metrics(face)
+                if all(replacement.has_glyph(ord(char)) for char in missing):
+                    result[original] = (face.family, missing)
+                    break
+        except (OSError, ValueError, RuntimeError, struct.error):
+            continue
     return result
 
 

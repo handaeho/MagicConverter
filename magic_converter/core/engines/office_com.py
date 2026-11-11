@@ -1,3 +1,9 @@
+"""Owned pywin32 automation sessions, executed in a bounded helper process.
+
+Word/Excel start inside a Job and bind only their private running document.
+PowerPoint starts empty in the same bounded launch path.
+Only newly created, identity-checked server PIDs can be reaped after a timeout.
+"""
 
 from __future__ import annotations
 
@@ -5,10 +11,9 @@ import gc
 import json
 import os
 import re
-import tempfile
 import time
 from weakref import WeakValueDictionary
-from contextlib import contextmanager, ExitStack, nullcontext
+from contextlib import contextmanager, ExitStack
 from functools import lru_cache
 from itertools import combinations
 from pathlib import Path
@@ -34,8 +39,6 @@ def com_available(progid: str) -> bool:
         except OSError:
             continue
     return False
-
-
 
 
 @contextmanager
@@ -92,14 +95,6 @@ def _powerpoint_hwnd(app, expected_pid=None) -> int:
 
 def application_hwnd(app, kind, expected_pid=None):
     if kind == 'powerpoint':return _powerpoint_hwnd(app,expected_pid)
-    if kind == 'hwp':
-        pass
-        for name in ('WindowHandle','Handle','Hwnd'):
-            try:
-                value = getattr(window,name)
-                return int(value() if callable(value) else value)
-            except Exception:continue
-        return 0
     if kind == 'word':
         if app.Windows.Count == 0:return 0
         value = app.Windows.Item(1).Hwnd
@@ -117,7 +112,6 @@ class ProcessLedger:
         self.unowned_apps = WeakValueDictionary()
         self.owned_apps = WeakValueDictionary()
         self.app_processes = {}
-        self.graceful_exits = set()
         self.launched = {}
         _save_json(path, {"owned": []})
 
@@ -243,7 +237,6 @@ def cleanup_owned_processes(path: Path) -> None:
 
 @contextmanager
 def application(kind: str, ledger: ProcessLedger):
-    import win32com.client
     app = None
     previous_count = 0
     old_security = None
@@ -252,79 +245,38 @@ def application(kind: str, ledger: ProcessLedger):
     preserve_server = False
     activation = ExitStack()
     try:
-        stage = "starting" if kind == "hwp" else "office"
-        ledger.mark(stage, "bounded process / ROT")
+        ledger.mark("office", "bounded process / ROT")
         from magic_converter.core.engines.office_activation import bounded_application
-        if kind == 'hwp':
-            pass
-            pass
-            from magic_converter.core.jobs.job_control import check_cancelled
-            check_cancelled()
-            pass
-            pass
-            ledger.mark(stage,'DispatchEx')
-            # Discovery/status I/O may consume the remaining deadline. Do not
-            # start a new SCM server for a request that has already ended.
-            # This guard does not impose a preactivation memory limit on SCM.
-            check_cancelled()
-            app = win32com.client.DispatchEx(progid)
-        else:app = activation.enter_context(bounded_application(kind,ledger))
-        ledger.mark(stage, "server identity")
-        if kind == "hwp":
-            ledger.track(app, kind)
-            preserve_server = ledger.unowned_apps.get(id(app)) is app
-            if preserve_server:
-                # Opening another HWP may replace a document in this server.
-                # Refuse before registration, mode changes, Open or Clear.
-                pass
-            ledger.require_owned(app, kind)
-            ledger.mark(stage, "generated interface")
-            try:
-                app = win32com.client.gencache.EnsureDispatch(app)
-            except Exception:
-                # Frozen builds can have a read-only gen_py cache. Dynamic
-                # IDispatch remains fully functional for these API calls.
-                pass
-            ledger.require_owned(app, kind)
-            pass
-            pass
-            pass
-            try:
-                # OOXML export uses Continue/Cancel (OKCANCEL), independently
-                pass
-            except Exception:
-                pass
-            ledger.mark(stage, "automation window")
-            pass
+        app = activation.enter_context(bounded_application(kind, ledger))
+        ledger.mark("office", "server identity")
+        collection = {"word": "Documents", "excel": "Workbooks", "powerpoint": "Presentations"}[kind]
+        previous_count = getattr(app, collection).Count
+        if previous_count:
+            # Some Office factories reuse an instance, even one started
+            # after our PID snapshot. Existing documents mean this is not
+            # our server: neither the Job nor later track calls may own it.
+            ledger.exclude(app)
+            raise ExistingOfficeServerError('기존 Office 서버를 재사용할 수 없습니다. 새 자동화 서버가 필요합니다.')
         else:
-            collection = {"word": "Documents", "excel": "Workbooks", "powerpoint": "Presentations"}[kind]
-            previous_count = getattr(app, collection).Count
-            if previous_count:
-                # Some Office factories reuse an instance, even one started
-                # after our PID snapshot. Existing documents mean this is not
-                # our server: neither the Job nor later track calls may own it.
-                ledger.exclude(app)
-                raise ExistingOfficeServerError('기존 Office 서버를 재사용할 수 없습니다. 새 자동화 서버가 필요합니다.')
-            else:
-                ledger.track(app, kind)
-            preserve_server = ledger.unowned_apps.get(id(app)) is app
-            if preserve_server:
-                raise ExistingOfficeServerError('기존 Office 서버를 재사용할 수 없습니다. 새 자동화 서버가 필요합니다.')
-            if kind != 'word':
-                ledger.require_owned(app, kind)
-            if kind != "powerpoint":
-                old_visible = app.Visible
-                if not previous_count and not preserve_server:
-                    app.Visible = False
-            old_alerts = app.DisplayAlerts
-            app.DisplayAlerts = 1 if kind == "powerpoint" else 0
-            try:
-                old_security = app.AutomationSecurity
-                app.AutomationSecurity = 3  # Disable document macros.
-            except Exception:
-                pass
-            if kind == 'word':
-                ledger.require_owned(app, kind)
+            ledger.track(app, kind)
+        preserve_server = ledger.unowned_apps.get(id(app)) is app
+        if preserve_server:
+            raise ExistingOfficeServerError('기존 Office 서버를 재사용할 수 없습니다. 새 자동화 서버가 필요합니다.')
+        if kind != 'word':
+            ledger.require_owned(app, kind)
+        if kind != "powerpoint":
+            old_visible = app.Visible
+            if not previous_count and not preserve_server:
+                app.Visible = False
+        old_alerts = app.DisplayAlerts
+        app.DisplayAlerts = 1 if kind == "powerpoint" else 0
+        try:
+            old_security = app.AutomationSecurity
+            app.AutomationSecurity = 3  # Disable document macros.
+        except Exception:
+            pass
+        if kind == 'word':
+            ledger.require_owned(app, kind)
         yield app
     finally:
         if app is not None:
@@ -337,11 +289,6 @@ def application(kind: str, ledger: ProcessLedger):
                 raise
             reused = bool(previous_count or preserve_server or ledger.unowned_apps.get(id(app)) is app
                           or not ledger.is_owned(app))
-            if kind == "hwp" and not reused:
-                try:
-                    app.Clear(1)
-                except Exception:
-                    pass
             if old_security is not None:
                 try:
                     app.AutomationSecurity = old_security
@@ -363,11 +310,6 @@ def application(kind: str, ledger: ProcessLedger):
                     app.Quit()
                 except Exception:
                     pass
-                else:
-                    if kind == 'hwp':
-                        identity = ledger.app_processes.get(id(app))
-                        if identity is not None:
-                            ledger.graceful_exits.add(identity)
             app = None
         activation.close()
         gc.collect()
@@ -548,30 +490,15 @@ def office_pdf(source: Path, destination: Path, ledger: ProcessLedger, *, print_
                     presentation = None
 
 
-def _hwp_open(hwp, source: Path) -> None:
-    if hwp.Open(str(source.resolve()), "", "forceopen:true;versionwarning:false") is False:
-        pass
-
-
-def _hwp_save(hwp, destination: Path, format_name: str) -> None:
-    if hwp.SaveAs(str(destination.resolve()), format_name, "") is False:
-        pass
-    if not destination.is_file() or not destination.stat().st_size:
-        pass
-
-
-
-
 def helper_main(request_path: Path, report_path: Path) -> int:
     ledger_path = report_path.with_suffix(".processes.json")
     ledger = None
     try:
         request = json.loads(request_path.read_text(encoding="utf-8"))
-        pass
+        if request["operation"] not in {"office_pdf", "excel_print"}:
+            raise ValueError("Unsupported Office worker operation")
         with com_apartment():
             ledger = ProcessLedger(ledger_path)
-            pass
-            pass
             source, destination = Path(request["source"]), Path(request["destination"])
             if request["operation"] == "excel_print":
                 office_pdf(source, destination, ledger, print_area_only=True)
@@ -584,15 +511,10 @@ def helper_main(request_path: Path, report_path: Path) -> int:
         return 1
     finally:
         gc.collect()
-        if ledger is not None:
-            try:
-                if ledger.graceful_exits:
-                    cleanup = ledger.budget.wait_for_exit(ledger.graceful_exits)
-                    _save_json(ledger.path, {'owned': ledger.owned, 'cleanup': cleanup})
-            finally:
+        try:
+            if ledger is not None:
                 ledger.budget.close()
-                cleanup_owned_processes(ledger_path)
-        else:
+        finally:
             cleanup_owned_processes(ledger_path)
 
 

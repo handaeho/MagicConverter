@@ -1,3 +1,4 @@
+"""HWP and HWPX conversion via rhwp and the document model."""
 
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from typing import Callable
 from magic_converter.core.conversion.converter import ConversionError
 from magic_converter.core.documents.hwp_documents import (Cell, DocumentData, Paragraph, Picture, Table, TextRun, document_html,
                                read_docx, read_hwp, read_hwpx, write_docx, write_hwpx)
+from magic_converter.core.engines.office_com import cleanup_owned_processes, com_available
 from magic_converter.core.jobs.job_control import check_cancelled, report_stage, JobCancelled, JobTimedOut
 from magic_converter.core.engines.office_process import run_helper
 
@@ -37,10 +39,10 @@ def validate_output(destination: Path) -> None:
     elif suffix == ".hwp":
         import olefile
         if not olefile.isOleFile(destination):
-            pass
+            raise ConversionError("유효한 HWP 문서가 생성되지 않았습니다.")
         with olefile.OleFileIO(destination) as archive:
             if not archive.exists("FileHeader") or not archive.openstream("FileHeader").read(32).startswith(b"HWP Document File"):
-                pass
+                raise ConversionError("유효한 HWP 5.x 문서가 생성되지 않았습니다.")
     elif suffix == ".pdf":
         with destination.open("rb") as document:
             if document.read(5) != b"%PDF-":
@@ -49,7 +51,6 @@ def validate_output(destination: Path) -> None:
 
 def run_com(source: Path, destination: Path, operation: str, *, validate: bool = True) -> None:
     """A modal COM dialog cannot block a pool thread indefinitely or the UI."""
-    pass
     from magic_converter.core.jobs.office_broker import native_proxy
     proxy = native_proxy.get()
     if proxy is not None:
@@ -63,7 +64,6 @@ def run_com(source: Path, destination: Path, operation: str, *, validate: bool =
         check_cancelled()
     try:
         check_cancelled()
-        pass
         _run_com(source, destination, operation)
         if validate:
             validate_output(destination)
@@ -222,9 +222,8 @@ def audit_output(source: Path, destination: Path, warning, data=None) -> None:
 
 
 def convert_hwp(source: Path, destination: Path, progress: Callable[[int | None], None],
-                   warning: Callable[[str], None] = lambda _: None, *, prefer_native: bool = True) -> None:
+                   warning: Callable[[str], None] = lambda _: None) -> None:
     ext, target = source.suffix.lower(), destination.suffix.lower()
-    data = None
     if ext in {".hwp", ".hwpx"} and target == ".txt":
         data = read_content(source)
         for message in data.warnings:
@@ -232,42 +231,8 @@ def convert_hwp(source: Path, destination: Path, progress: Callable[[int | None]
         destination.write_text(data.text(), encoding="utf-8-sig")
         progress(100)
         return
-    enabled = prefer_native and automation_enabled()
-    pass
-    if available:
-        progress(None)
-        try:
-            from magic_converter.core.documents.document_audit import inventory
-            if ext == ".docx":
-                data = office_content(source)
-            if ext in {".pptx", ".xlsx"} or data and inventory(data)["equations"]:
-                with tempfile.TemporaryDirectory(prefix="magic-office-text-") as directory:
-                    intermediate = Path(directory) / "document.hwpx"
-                    data = data or office_content(source)
-                    write_hwpx(data, intermediate)
-                    pass
-                pass
-                for message in data.warnings:
-                    warning(message)
-            else:
-                pass
-            messages = []
-            audit_output(source, destination, messages.append, data)
-            for message in messages:
-                warning(message)
-            if any(message.startswith("손실 검사:") for message in messages):
-                pass
-            progress(100)
-            return
-        except (JobCancelled, JobTimedOut):
-            raise
-        except Exception as exc:
-            pass
-            destination.unlink(missing_ok=True)
-            pass
-    else:
-        pass
     progress(20)
+    data = None
     from magic_converter.core.engines import rhwp_engine
     if rhwp_engine.locate() and (target == ".hwp" or ext in {".hwp", ".hwpx"} and target in {".hwpx", ".pdf"}):
         try:
@@ -281,9 +246,9 @@ def convert_hwp(source: Path, destination: Path, progress: Callable[[int | None]
                 if target == ".pdf":
                     data = data or read_content(source)
                     if rhwp_engine.shaping_required(data.text()):
-                        raise ConversionError("복합 문자 조판을 위해 대체 PDF 엔진을 사용합니다.")
+                        raise ConversionError("복합 문자 조판을 위해 문서 모델로 PDF를 만듭니다.")
                 rhwp_engine.convert(intermediate, destination, warning=warning)
-            pass
+            warning(f"rhwp {rhwp_engine.VERSION}로 변환했습니다. 글꼴·쪽 나눔은 달라질 수 있습니다.")
             audit_output(source, destination, warning, data)
             progress(100)
             return
@@ -293,10 +258,10 @@ def convert_hwp(source: Path, destination: Path, progress: Callable[[int | None]
             destination.unlink(missing_ok=True)
             if target == ".hwp":
                 raise ConversionError(f"HWP 저장 실패: {exc}") from exc
-            warning(f"rhwp 대체 경로 실패: {str(exc)[:180]}")
+            warning(f"rhwp 처리 오류: {str(exc)[:180]}")
     elif target == ".hwp":
-        pass
-    report_stage("문서 변환 중")
+        raise ConversionError("HWP 저장에는 rhwp 엔진이 필요합니다.")
+    report_stage("문서 모델로 변환 중")
     data = data or read_content(source)
     if target == ".docx":
         write_docx(data, destination)
@@ -307,7 +272,10 @@ def convert_hwp(source: Path, destination: Path, progress: Callable[[int | None]
         # Qt's limited HTML table renderer. Keep an entirely local Qt fallback.
         if com_available("Word.Application"):
             try:
-                pass
+                with tempfile.TemporaryDirectory(prefix="magic-hwp-pdf-") as directory:
+                    intermediate = Path(directory) / "document.docx"
+                    write_docx(data, intermediate)
+                    run_com(intermediate, destination, "office_pdf")
             except (JobCancelled, JobTimedOut):
                 raise
             except Exception as exc:
@@ -351,7 +319,7 @@ def convert_office_pdf(source: Path, destination: Path, progress: Callable[[int 
         except Exception as exc:
             LOGGER.warning("Office PDF automation failed: %s", exc)
             destination.unlink(missing_ok=True)
-            warning("Office PDF 출력에 실패하여 사용 가능한 대체 엔진으로 변환했습니다.")
+            warning("Office PDF 출력에 실패해 기본 PDF 엔진으로 변환했습니다.")
     from magic_converter.core.engines.office_engine import find_libreoffice, office_pdf
     engine = "qt"
     if find_libreoffice():

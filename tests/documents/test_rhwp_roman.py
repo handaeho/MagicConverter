@@ -19,7 +19,7 @@ class RomanFallbackTests(unittest.TestCase):
 
     def test_only_missing_roman_segments_change_font_and_style_metrics_remain(self):
         header, sections = self.document()
-        pass
+        changed, output, edits = normalize(header, sections, {'굴림': ('Segoe UI Symbol', set('ⅪⅫ'))})
         self.assertEqual(len(edits), 1)
         before, after = etree.fromstring(sections['Contents/section0.xml']), etree.fromstring(output['Contents/section0.xml'])
         self.assertEqual(''.join(before.itertext()), ''.join(after.itertext()))
@@ -35,7 +35,9 @@ class RomanFallbackTests(unittest.TestCase):
 
     def test_no_available_replacement_or_uncovered_character_keeps_original_bytes(self):
         header, sections = self.document()
-        pass
+        for mapping in ({}, {'unrelated': ('Segoe UI Symbol', set('ⅪⅫ'))}, {'굴림': ('Segoe UI Symbol', {'x'})}):
+            with self.subTest(mapping=mapping):
+                self.assertEqual(normalize(header, sections, mapping), (header, sections, []))
 
     def test_control_children_and_mixed_font_slots_are_not_rewritten(self):
         header, sections = self.document()
@@ -43,16 +45,16 @@ class RomanFallbackTests(unittest.TestCase):
         run = next(node for node in root.iter(f'{{{P}}}run') if 'Ⅺ' in ''.join(node.itertext()))
         etree.SubElement(run, f'{{{P}}}ctrl')
         mixed = {'Contents/section0.xml': etree.tostring(root)}
-        pass
+        self.assertFalse(normalize(header, mixed, {'굴림': ('Segoe UI Symbol', set('ⅪⅫ'))})[2])
         head = etree.fromstring(header)
         style_id = run.get('charPrIDRef')
         style = next(node for node in head.iter(f'{{{H}}}charPr') if node.get('id') == style_id)
         ref = style.find(f'{{{H}}}fontRef'); ref.set('symbol', '99999')
-        pass
+        self.assertFalse(normalize(etree.tostring(head), sections, {'굴림': ('Segoe UI Symbol', set('ⅪⅫ'))})[2])
 
     def test_installed_original_coverage_is_required_before_replacement(self):
         with patch('magic_converter.core.pdf.pdf_fonts.resolve_font', return_value=None):
-            self.assertEqual(available_replacements([]), {})
+            self.assertEqual(available_replacements(), {})
 
     def test_large_alternating_run_cannot_exceed_split_budget_or_emit_partial_text(self):
         header, sections = self.document()
@@ -60,7 +62,7 @@ class RomanFallbackTests(unittest.TestCase):
         text = next(node for node in root.iter(f'{{{P}}}t') if 'Ⅺ' in (node.text or ''))
         text.text = 'AⅪ' * 3000
         large = {'Contents/section0.xml': etree.tostring(root)}
-        pass
+        self.assertEqual(normalize(header, large, {'굴림': ('Segoe UI Symbol', set('ⅪⅫ'))}), (header, large, []))
 
 
 if __name__ == '__main__':

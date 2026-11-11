@@ -1,3 +1,10 @@
+"""Start installed native servers inside a Job before COM activation.
+
+Only query the ROT for that already-running file. BindToObject/GetObject(path)
+could activate another unbounded server and are deliberately not used here.
+PowerPoint queries its active object only after an empty automation process
+is launched under the budget.
+"""
 from contextlib import contextmanager
 from pathlib import Path
 import subprocess
@@ -62,8 +69,6 @@ def _refuse_existing_powerpoint():
     from magic_converter.core.engines.office_com import ExistingOfficeServerError
     if powerpoint_pids():
         raise ExistingOfficeServerError('기존 Office 서버(PowerPoint)를 재사용할 수 없습니다. 문서를 보존하고 입력을 거부했습니다.')
-
-
 
 
 def _running_document(path):

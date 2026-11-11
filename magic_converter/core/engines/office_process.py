@@ -13,6 +13,9 @@ from magic_converter.core.jobs.process_runner import start_process, stop_process
 from magic_converter.core.engines.office_budget import OFFICE_COMMIT_BYTES
 
 LOGGER = logging.getLogger(__name__)
+STAGES = {"starting": (30, "변환 엔진 연결 중"),
+          "cleanup": (15, "변환 작업 정리 중"), "office": (150, "Office 문서 출력 중"),
+          "office_export": (150, "Excel 전체 문서 출력 중")}
 
 
 def run_helper(command: list[str], state_path: Path, *, timeout: float = 180) -> tuple[int, str]:

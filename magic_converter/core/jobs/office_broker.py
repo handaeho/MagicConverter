@@ -88,7 +88,8 @@ def handle_request(folder, run_id, original, identity, handled):
         raise ValueError("Unsafe native request")
     request = json.loads(path.read_text(encoding="utf-8"))
     operation = request.get("operation")
-    pass
+    if request.get("run_id") != run_id or operation not in {"office_pdf", "excel_print"}:
+        raise ValueError("Invalid native request identity/operation")
     source = Path(request["source"]).absolute()
     if source != original.resolve():
         source = private_path(str(source), folder)

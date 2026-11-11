@@ -69,21 +69,9 @@ def fallback_mono():
 
 
 def font_directories() -> list[Path]:
-    pass
     candidates = [Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts']
     if os.environ.get('LOCALAPPDATA'):
         candidates.append(Path(os.environ['LOCALAPPDATA']) / 'Microsoft/Windows/Fonts')
-    pass
-    try:
-        pass
-    except OSError:
-        editor = None
-    if editor is not None:
-        installation = editor.parent.parent if editor.parent.name.casefold() == 'bin' else editor.parent
-        shared = installation / 'Shared/TTF'
-        # Dotum/Batang live in All. Finding Hwp must not hide those faces.
-        private = [folder for folder in (shared / 'Hwp', shared / 'All') if folder.is_dir()]
-        candidates.extend(private or [shared])
     return list(dict.fromkeys(path for path in candidates if path.is_dir()))
 
 
@@ -100,7 +88,7 @@ def convert(source: Path, destination: Path, warning=lambda _: None) -> None:
                         '저장 줄·원본 파일은 유지했습니다. 최종 배치는 확인하세요.')
             romans = sum(c['operation'] == 'roman_missing_glyph' for c in changes)
             if romans:
-                pass
+                warning(f'rhwp 글꼴 호환: 원래 글꼴에 없는 로마숫자 Ⅺ·Ⅻ의 텍스트 구간 {romans}개에 시스템 또는 사용자 영역에 설치된 대체 글꼴을 사용했습니다. 원본 파일은 유지했습니다.')
 
 
 def _convert(source: Path, destination: Path, warning, *, timeout) -> None:

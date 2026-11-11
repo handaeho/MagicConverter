@@ -123,8 +123,6 @@ class OfficeBudgetTests(unittest.TestCase):
             with self.subTest(seconds=seconds), self.assertRaises(ValueError):
                 OfficeProcessBudget([]).wait_for_exit([], seconds)
 
-    pass
-
     def test_abrupt_helper_exit_also_closes_the_external_server_job(self):
         with tempfile.TemporaryDirectory() as folder:
             process, created, _ = self.child(Path(folder), 0)
@@ -154,11 +152,10 @@ class OfficeBudgetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             ledger = ProcessLedger(Path(folder)/'report.processes.json')
             process, created, _ = self.child(Path(folder), 0)
-            app = MagicMock()
-            pass
+            app = MagicMock(Hwnd=123)
             try:
                 with patch('win32process.GetWindowThreadProcessId', return_value=(1, process.pid)):
-                    ledger.track(app, 'hwp')
+                    ledger.track(app, 'excel')
                 receipt = json.loads(ledger.path.read_text(encoding='utf-8'))['owned'][0]
                 self.assertEqual((receipt['pid'], receipt['created']), (process.pid, created))
                 self.assertEqual(receipt['activation'], 'scm')

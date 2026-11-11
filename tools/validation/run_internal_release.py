@@ -79,7 +79,8 @@ def main():
                 'MAGIC_CONVERTER_PHASE_TRACE', 'MAGIC_CONVERTER_EXCEL_VALIDATION_PRINTER',
                 'QT_QPA_PLATFORM_PLUGIN_PATH'):
         env.pop(key, None)
-    pass
+    env.update(PYTHONUTF8='1', QT_QPA_PLATFORM='offscreen',
+               MAGIC_CONVERTER_TEST_OFFICE='0')
 
     def save():
         tmp = out / 'result.tmp'

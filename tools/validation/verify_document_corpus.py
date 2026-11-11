@@ -26,7 +26,11 @@ def main():
     folder = args.output.resolve(); folder.mkdir(parents=True, exist_ok=False)
     corpus = args.corpus.resolve()
     if folder.is_relative_to(corpus): raise ValueError('Output must be outside original corpus')
-    pass
+    report = {'status':'running', 'version':__version__, 'mode':'frozen' if args.executable else 'source',
+              'executable_sha256':sha(args.executable) if args.executable else None,
+              'sampling':'first, middle, last page (deduplicated)', 'cases':[],
+              'text_measurement':'Non-whitespace native PDF character counts; not semantic equivalence or OCR.',
+              'limitations':['Sampled PDF visual roundtrip, not full-page or semantic Office corpus certification.']}
     report_path = folder / 'report.json'
     def save(): report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     save()

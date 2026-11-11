@@ -56,7 +56,7 @@ class ToolTestCase(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        pass
+        self.catalog = create_catalog(ffmpeg_available=bool(find_ffmpeg()), presentation_available=False)
 
     def tearDown(self):
         APP.processEvents()

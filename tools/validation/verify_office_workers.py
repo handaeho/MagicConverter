@@ -1,3 +1,4 @@
+"""Frozen Office broker and HWP/HWPX library route evidence."""
 
 import argparse
 import hashlib
@@ -60,7 +61,7 @@ def main():
 
     hwpx, job = convert(source, "document:hwpx", "hwpx")
     assert "Office worker text" in read_hwpx(hwpx).text()
-    pass
+    assert any("문서 모델" in notice for notice in job["warnings"])
     hwp, _ = convert(hwpx, "document:hwp", "binary")
     restored, _ = convert(hwp, "document:docx", "restored")
     assert "Office worker text" in "\n".join(p.text for p in Document(restored).paragraphs)
@@ -94,7 +95,10 @@ def main():
         assert not any("실패" in n or "완료하지 못" in n or "대체" in n for n in job["warnings"]), job
         native = {"status": "passed", "exports": records, "windowed_word": "passed"}
     assert all(sha(p) == digest for p, digest in originals.items())
-    pass
+    result = {"status": "passed", "version": __version__, "cli_sha256": sha(cli), "gui_sha256": sha(gui),
+              "rhwp_roundtrip": "passed", "windowed_worker_events": "passed",
+              "invalid_input": "refused_without_publication", "empty_archive": "passed", "subtitle": "passed",
+              "source_hashes_preserved": True, "native_office": native}
     (folder / "report.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

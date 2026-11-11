@@ -48,7 +48,7 @@ try {
             if ($LASTEXITCODE) { throw "CI command failed: $LASTEXITCODE" }
             Invoke-CiNative { ./.venv/Scripts/python.exe tools/validation/verify_source_export.py --report .test-artifacts/ci/original-export.json }
             if ($LASTEXITCODE) { throw "CI command failed: $LASTEXITCODE" }
-            Invoke-CiNative { ./.venv/Scripts/python.exe tools/validation/verify_document_failure_gate.py --report .test-artifacts/ci/injected-native-failure.json }
+            Invoke-CiNative { ./.venv/Scripts/python.exe tools/validation/verify_document_failure_gate.py --report .test-artifacts/ci/injected-document-failure.json }
             if ($LASTEXITCODE) { throw "CI command failed: $LASTEXITCODE" }
             Invoke-CiNative { ./.venv/Scripts/python.exe tools/validation/verify_build_failure_gates.py $env:MAGIC_CONVERTER_RELEASE_DIR/magic_converter-cli.exe --report .test-artifacts/ci/injected-build-failure.json }
             if ($LASTEXITCODE) { throw "CI command failed: $LASTEXITCODE" }

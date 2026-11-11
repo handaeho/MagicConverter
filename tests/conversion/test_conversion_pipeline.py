@@ -92,8 +92,13 @@ assert not any(n.startswith(('PySide6', 'PIL', 'pymupdf')) for n in sys.modules)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_missing_engines_have_reasons_without_disabling_builtin_fallbacks(self):
-        pass
-        pass
+        catalog = create_catalog(ffmpeg_available=False, presentation_available=False)
+        for name, action, reason in (("video.mp4", "media:mp3", "FFmpeg"),
+                                     ("deck.ppt", "document:png", "PowerPoint/LibreOffice"),
+                                     ("source.hwpx", "document:hwp", "rhwp")):
+            available = catalog.assess(name, action)
+            self.assertIsNone(available.route)
+            self.assertIn(reason, available.reason)
         for name, action in (("source.png", "image:jpg"), ("source.hwp", "document:docx"),
                              ("source.docx", "document:hwpx"), ("source.docx", "document:pdf")):
             self.assertIsNotNone(catalog.assess(name, action).route)
@@ -107,7 +112,8 @@ assert not any(n.startswith(('PySide6', 'PIL', 'pymupdf')) for n in sys.modules)
         self.assertTrue(request.uses_office_queue)
         slots = {slot.action.key: slot for slot in slots_for(["photo.png", "report.docx"], "convert")}
         self.assertTrue(slots["document:pdf"].enabled)
-        pass
+        missing = {slot.action.key: slot for slot in slots_for(["notes.txt", "deck.ppt"], "convert",
+                                                              presentation_available=False)}
         self.assertFalse(missing["document:pdf"].enabled)
         self.assertIn("PowerPoint", missing["document:pdf"].reason)
         for paths, action in (([], "document:pdf"), (["x.txt"], "unknown"),
@@ -121,7 +127,7 @@ class PipelineOutputTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        pass
+        self.catalog = create_catalog(ffmpeg_available=False, presentation_available=False)
 
     def tearDown(self):
         self.temporary.cleanup()

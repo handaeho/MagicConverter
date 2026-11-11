@@ -21,7 +21,7 @@ MAX_NODES = 2000000  # Includes mapping keys and model field wrappers.
 def model_types():
     from magic_converter.core.documents import hwp_documents as model
     return {name: getattr(model, name) for name in
-            ("DocumentData", "Paragraph", "TextRun", "Picture", "Equation", "Table", "Cell", "Border")}
+            ("DocumentData", "Paragraph", "TextRun", "Picture", "Equation", "InlineLine", "Table", "Cell", "Border")}
 
 
 def encode(value):

@@ -1,3 +1,4 @@
+# Fixed HWPX controls
 
 The HWP input referenced by `manifest.json` is the existing project-generated
 one-cell table and orange picture fixture. The checked-in HWPX adds authored

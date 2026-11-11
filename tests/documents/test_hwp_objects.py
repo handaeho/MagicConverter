@@ -21,7 +21,7 @@ import pymupdf as fitz
 from magic_converter.core.conversion.converter import ConversionError
 from magic_converter.core.conversion.extended_converter import convert_extended
 from magic_converter.core.conversion.file_router import ALL_ACTIONS
-from magic_converter.core.documents.hwp_documents import (Border, Cell, DocumentData, Paragraph, Picture, Table, TextRun,
+from magic_converter.core.documents.hwp_documents import (Border, Cell, DocumentData, InlineLine, Paragraph, Picture, Table, TextRun,
                                                    read_hwp, read_hwpx, read_docx, write_hwpx, write_docx)
 from magic_converter.core.documents.rich_hwp import object_counts, walk_blocks
 
@@ -148,7 +148,9 @@ class HwpObjectTests(unittest.TestCase):
         source = self.root / "nested.hwpx"
         write_hwpx(self.fixture(), source)
         notices = []
-        pass
+        with patch("magic_converter.core.engines.rhwp_engine.locate", return_value=None), patch(
+                "magic_converter.core.engines.hwp_converter.com_available", return_value=False):
+            output = convert_extended(source, ALL_ACTIONS["document:pdf"], lambda _: None, notices.append)
         with fitz.open(output) as pdf:
             self.assertGreaterEqual(sum(len(p.get_images()) for p in pdf), 1)
             self.assertIn("Merged", "".join(p.get_text() for p in pdf))
@@ -218,6 +220,32 @@ class HwpObjectTests(unittest.TestCase):
                 output.writestr(name, data)
         picture = next(block for block in walk_blocks(read_hwpx(adjusted).blocks) if isinstance(block, Picture))
         self.assertAlmostEqual(picture.crop[1], .1, places=4)
+
+    def test_word_group_in_compatibility_choice_survives_as_editable_line(self):
+        from docx import Document
+        from lxml import etree
+
+        line = InlineLine(510.1, .6, 0, 510.09, .3, .6)
+        word, hwpx, returned = (self.root / name for name in ("line.docx", "line.hwpx", "returned.docx"))
+        write_docx(DocumentData([Paragraph([line])], margins=(39, 39, 49, 14)), word)
+        document = Document(word)
+        drawing = document.element.xpath(".//w:drawing")[0]
+        mc = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+        alternate = etree.Element(mc + "AlternateContent", nsmap={
+            "wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"})
+        drawing.addprevious(alternate)
+        etree.SubElement(alternate, mc + "Choice", Requires="wpg").append(drawing)
+        etree.SubElement(alternate, mc + "Fallback")
+        document.save(word)
+        model = read_docx(word)
+        self.assertEqual(model.blocks[0].runs, [line])
+        write_hwpx(model, hwpx)
+        with zipfile.ZipFile(hwpx) as package:
+            root = ET.fromstring(package.read("Contents/section0.xml"))
+            self.assertEqual(len(root.findall(".//{*}line")), 1)
+            self.assertFalse(root.findall(".//{*}pic"))
+        write_docx(read_hwpx(hwpx), returned)
+        self.assertEqual(read_docx(returned).blocks[0].runs, [line])
 
     @unittest.skipUnless(USER_HWP.exists() and USER_HWPX.exists(), "User-provided regression documents are local only")
     def test_supplied_documents_keep_every_table_and_picture_without_modifying_originals(self):

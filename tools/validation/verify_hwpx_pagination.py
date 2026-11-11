@@ -76,7 +76,6 @@ def main():
     parser=argparse.ArgumentParser();parser.add_argument('--source',type=Path,required=True)
     parser.add_argument('--reference',type=Path,required=True);parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--executable',type=Path)
-    pass
     parser.add_argument('--expect-pages',type=int)
     parser.add_argument('--max-shifted-anchors',type=int)
     args=parser.parse_args();root=args.output.resolve();root.mkdir(parents=True,exist_ok=False)
@@ -84,11 +83,6 @@ def main():
     def save(): (root/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     save()
     try:
-        if args.native:
-            from magic_converter.core.settings.preferences import default_preferences
-            from magic_converter.core.settings.settings_store import SettingsStore
-            profile=root/'profile';profile.mkdir()
-            pass
         before={str(p.resolve()):sha(p) for p in (args.source,args.reference)}
         env=os.environ.copy();env['PYTHONUTF8']='1'
         prefix=[str(args.executable.resolve())] if args.executable else [sys.executable,str(ROOT/'run_magic_converter.py')]
@@ -107,9 +101,6 @@ def main():
         if args.max_shifted_anchors is not None and shifted>args.max_shifted_anchors:
             raise ValueError('Page anchor drift exceeds explicit limit')
         report['warnings']=job['jobs'][0].get('warnings',[])
-        report['native_requested']=args.native
-        if args.native and any('대체' in w or 'rhwp' in w for w in report['warnings']):
-            pass
         report['original_hashes']=before
         report['executable_sha256']=sha(args.executable) if args.executable else None
         if any(sha(Path(p))!=h for p,h in before.items()): raise ValueError('Original corpus changed')

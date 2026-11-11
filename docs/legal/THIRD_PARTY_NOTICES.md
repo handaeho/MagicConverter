@@ -5,6 +5,7 @@
 The installer embeds CPython 3.14.10, 34 pinned Python wheels, FFmpeg and
 FFprobe 9.0.2 built from source, rhwp 0.8.7 and the app-local Microsoft VC runtime.
 The engine license files and notices are installed under `app/vendor`.
+CPython and wheel license files are installed with the runtime.
 [Installer notices](../../packaging/public-windows/THIRD_PARTY_NOTICES.txt)
 
 The [v2.2.35 release](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.35)
@@ -46,46 +47,7 @@ one-file archive under vendor/ffmpeg.
   are included under vendor/rhwp. Its Microsoft VC runtime 14.44.35208 DLLs are
   distributed app-local with their original runtime license files. Pinned asset
   URLs and SHA-256 values are documented in vendor/rhwp/BUILD.md.
-  unmodified for optional per-user registration after explicit settings consent.
-- The blank HWPX template comes from python-hwpx (Apache-2.0). Its pinned
-  source, LICENSE and NOTICE are bundled under magic_converter/data/hwpx.
-  Only the template is used; python-hwpx is not a runtime dependency.
-- Filee (MIT), Copyright (c) 2026 Myeonggu Kim (KnifeLemon) and Filee
-  contributors: https://github.com/KnifeLemon/Filee
-  The converter contract, format/engine catalog separation and bounded graph
-  routing design were referenced at commit
-  b249fec88463ad283750038ae3c317fa11ad50cb, especially
-  src/Filee.Core/Conversion/IConverter.cs, RoutePlanner.cs and ConverterCatalog.cs.
-  Stage 3 also references the separation of immutable conversion recipes,
-  stable profile references, output rules and per-file history in
-  src/Filee.Core/Presets/Preset.cs, Profiles/ToolbarProfile.cs,
-  Settings/AppSettings.cs and History/HistoryEntry.cs at the same commit.
-  Stage 4 references PDF page/merge/split options, image/frame operations and
-  archive/subtitle validation from Presets/Preset.cs and the Pdf, Magick, Media,
-  Subtitles and Archives directories under src/Filee.Engines. These tools are
-  implemented in Python with the already bundled PDF, Pillow and FFmpeg engines.
-  Stage 5 references Hwp/RhwpConverter.cs and the HWPX document model, especially
-  Hwp/Hwpx/Docx/OmmlReader.cs, EquationScript.cs and HwpxWriter.Objects.cs.
-  Common equation box proportions are adapted from EquationScript.Measure;
-  original OMML preservation, Python model and loss audit are implemented locally.
-  Stage 6 references Core/Watching/FolderWatcher.cs, WatchRule.cs and
-  GeneratedWatchOutputs.cs; Core/Web/WebDrop.cs and WebDownloader.cs;
-  App/Services/SingleInstance.cs and CommandLine.cs; Filee.Cli/CliOptions.cs;
-  and the Windows Explorer integration sources and their tests. Stable-input
-  settling, generated-output exclusions, bounded web transfers and per-profile
-  IPC forwarding informed the Python implementation. Watch result receipts,
-  SQLite journals and current-user Qt IPC are implemented locally. The Explorer
-  entry uses the classic per-user menu; Filee's Windows 11 COM/MSIX package is
-  not included or installed.
-  Stage 7 references Data/DataConverter.cs, XmlData.cs and CsvData.cs;
-  Fonts/FontConverter.cs and FontFile.cs; Ebooks/Book.cs, EbookConverter.cs and
-  Fb2Writer.cs; Email/EmlConverter.cs; Models3D/ModelConverter.cs and ObjFormat.cs;
-  Geo/GeoConverter.cs and docs/ENGINES.md. Model boundaries, direct conversion
-  paths and preservation notices informed the Python implementation.
-  docs/reference/FORMAT_CONTRACTS.md specifies its shipped scope and exclusions.
-  The Python implementation uses the existing magic_converter encoders; Filee
-  and its .NET runtime/engines are not runtime dependencies.
-  The upstream copyright and permission notice is included in licenses/Filee-MIT.txt.
+
 
 Stage-7 dependencies: fontTools 4.67.0 (MIT, including LICENSE.external),
 Brotli 1.2.0 (MIT), zopfli 0.4.3 (Apache-2.0), PyYAML 6.0.3 (MIT),
@@ -104,11 +66,13 @@ with exact archive hashes and upstream source-archive references. Original wheel
 notices (153 files), distribution metadata and Python's full license are retained
 under licenses/runtime and checked against packaging/notices-lock.json. Vendor
 archives and selected member hashes are in packaging/vendor-lock.json. Tracked
+Blank HWPX and Filee reference assets are in packaging/source-assets.json.
 The SPDX 2.3 SBOM distinguishes observed bundle inputs from build dependencies.
 It records upstream license declarations; licenseConcluded remains NOASSERTION.
 It does not exhaustively enumerate native subcomponents inside wheels/engines.
 Qt commercial license text in a wheel is not evidence of a commercial entitlement.
 Project licensing, AGPL/commercial selection, Qt module/source/relink obligations,
+FFmpeg corresponding sources remain subject to
 review. See packaging/release-policy.json; internal build success is not public
 redistribution approval. The checked SPDX schema is from spdx/spdx-spec v2.3;
 its original license is retained in packaging/schemas/SPDX-LICENSE.

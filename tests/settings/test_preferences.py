@@ -60,9 +60,9 @@ class PreferencesTests(unittest.TestCase):
         self.temp.cleanup()
 
     def test_registry_values_migrate_once_and_json_takes_precedence(self):
-        pass
+        first = self.store.load({"threshold": 21, "obsolete_engine_setting": True, "interval_ms": 1})
         self.assertEqual(first.threshold, 21)
-        pass
+        self.assertNotIn("obsolete_engine_setting", first.to_dict())
         self.assertEqual(first.interval_ms, 35)
         self.assertTrue(first.presets)
         self.assertEqual(self.store.load({"threshold": 77}), first)
@@ -241,7 +241,7 @@ class RecipeExecutionTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.source = self.root / "사진.png"
         Image.new("RGB", (120, 60), "orange").save(self.source)
-        pass
+        self.catalog = create_catalog(ffmpeg_available=False, presentation_available=False)
 
     def tearDown(self):
         APP.processEvents()

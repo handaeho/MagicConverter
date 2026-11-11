@@ -8,6 +8,31 @@ from magic_converter.core.documents.hwp_documents import DocumentData,Paragraph,
 
 
 class CharacterSpacingTests(unittest.TestCase):
+    def test_verified_word_faces_keep_fixed_space_and_bold_mixed_tracking_in_hwpx(self):
+        from magic_converter.core.documents.character_spacing import glyph_advances, metric_characters
+
+        runs = [
+            TextRun(" ", font="Batang", size=19, spacing_pt=2.9),
+            TextRun("Arch-OCR v2.0 설치", font="Malgun Gothic", size=11, bold=True, spacing_pt=-.1),
+            TextRun("□", font="Malgun Gothic", size=12, bold=True, spacing_pt=-.1),
+        ]
+        if not all(glyph_advances(run, allow_word_faces=True) for run in runs):
+            self.skipTest("The measured Windows font revisions are not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            source, output = Path(tmp) / "source.docx", Path(tmp) / "output.hwpx"
+            write_docx(DocumentData([Paragraph(runs)]), source)
+            write_hwpx(read_docx(source), output)
+            restored = read_hwpx(output).blocks[0].runs
+            self.assertTrue(all(run.use_font_space for run in restored if " " in run.text))
+            actual = [metric for run in restored for metric in metric_characters(run)]
+            expected = [metric for run in runs for metric in metric_characters(run)]
+            balance = 0
+            for (char, unit, spacing, scale), other in zip(actual, expected, strict=True):
+                self.assertEqual((char, unit, scale), (other[0], other[1], other[3]))
+                self.assertNotEqual(spacing, 0)
+                balance += spacing - other[2]
+                self.assertLessEqual(abs(balance), .1)
+
     def test_docx_fixed_spacing_is_retained_in_model_and_docx_output(self):
         with tempfile.TemporaryDirectory()as tmp:
             a=Path(tmp)/'source.docx';b=Path(tmp)/'returned.docx';doc=Document();run=doc.add_paragraph().add_run('가나다라')

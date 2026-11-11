@@ -29,7 +29,7 @@ def main():
         for kind,source in [('word',word),('excel',excel),('powerpoint',powerpoint)]:
             folder=root/kind;folder.mkdir();output=folder/'output.pdf'
             request,result=folder/'request.json',folder/'result.json';ledger=result.with_suffix('.processes.json')
-            pass
+            request.write_text(json.dumps({'source':str(source),'destination':str(output),'operation':'office_pdf'}),encoding='utf-8')
             process=job=handle=runtime=None
             try:
                 with (folder/'stdout.log').open('wb') as log,(folder/'stderr.log').open('wb') as errors:
