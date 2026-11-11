@@ -2,7 +2,7 @@
 
 The [v2.2.31 release](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.31)
 provides the corresponding application and native sources, build inputs, notices
-and SHA-256 checksums alongside the Windows installer.
+and SHA-256 checksums alongside the Windows ZIP containing both wizards.
 
 On Windows x64, extract `MagicConverter-corresponding-source.zip` and use Python
 3.14 and the Windows .NET Framework 4.x C# compiler:
@@ -10,6 +10,7 @@ On Windows x64, extract `MagicConverter-corresponding-source.zip` and use Python
 ```powershell
 python .\tools\build\build_public_windows.py --output .\installer-output
 python .\tools\build\build_windows_uninstaller.py --output .\uninstaller-output
+Compress-Archive -LiteralPath .\installer-output\MagicConverter-Setup.exe, .\uninstaller-output\Uninstall.exe -DestinationPath .\MagicConverter-2.2.31-Windows-x64.zip
 ```
 
 The first command obtains the pinned `MagicConverter-runtime-inputs.zip` and

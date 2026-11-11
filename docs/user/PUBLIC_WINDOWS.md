@@ -2,7 +2,7 @@
 
 ## EXE로 시작하기
 
-1. [MagicConverter-Setup.exe](https://github.com/handaeho/MagicConverter/releases/download/v2.2.31/MagicConverter-Setup.exe)를 실행합니다.
+1. ZIP을 다운로드해 압축을 푼 뒤 `MagicConverter-Setup.exe`를 실행합니다. [Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.31/MagicConverter-2.2.31-Windows-x64.zip)
 2. 설치 안내를 읽고 라이선스에 동의한 뒤 설치 폴더를 선택합니다. 기본 폴더는 `%LOCALAPPDATA%\Programs\MagicConverter\2.2.31`입니다. 새 폴더나 비어 있는 전용 폴더를 지정할 수도 있습니다.
 3. 경로를 확인하고 **설치**를 누릅니다. 마법사가 내장 파일의 해시를 확인한 뒤 Python 3.14.10, 필수 라이브러리 34개, FFmpeg·FFprobe와 rhwp를 설치합니다. 설치 후 앱이 열리고 시작 메뉴에서 다시 실행할 수 있습니다.
 
