@@ -16,6 +16,7 @@ SOURCE = """
 LICENSE assets/README.md assets/magic_converter-tool.ico assets/magic_converter-tool.svg
 docs/user/UNINSTALL_WINDOWS.md packaging/app.manifest packaging/public-windows/uninstall.cs
 packaging/public-windows/process_arguments.cs packaging/public-windows/install_location.cs
+packaging/public-windows/wizard_window.cs packaging/public-windows/uninstall_wizard.cs
 tools/build/build_windows_uninstaller.py
 tools/build/build_public_windows.py
 tools/build/windows_runtime_bundle.py
@@ -61,8 +62,12 @@ def build(output, inventory):
         (staging / "uninstall-files.gz").write_bytes(gzip.compress(contents, mtime=0))
         compile_exe(compiler, staging, ready / "Uninstall.exe", "uninstall.cs", "winexe",
                     "/reference:System.IO.Compression.dll", "/reference:Microsoft.CSharp.dll",
+                    "/reference:System.Drawing.dll",
                     "/resource:uninstall-files.gz,uninstall-files.gz",
-                    str(ROOT / "packaging/public-windows/install_location.cs"))
+                    "/resource:" + str(ROOT / "assets/magic_converter-tool.ico") + ",magic-converter-wizard.ico",
+                    str(ROOT / "packaging/public-windows/install_location.cs"),
+                    str(ROOT / "packaging/public-windows/uninstall_wizard.cs"),
+                    str(ROOT / "packaging/public-windows/wizard_window.cs"))
         (ready / "Uninstall-corresponding-source.zip").write_bytes(source_zip)
         (ready / "SHA256SUMS.txt").write_text("".join(
             f"{sha(path.read_bytes())}  {path.name}\n" for path in sorted(ready.iterdir())

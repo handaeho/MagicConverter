@@ -54,6 +54,7 @@ packaging/public-windows/engines-lock.json tools/__init__.py tools/dependencies/
 packaging/public-windows/setup.cs packaging/public-windows/process_arguments.cs
 packaging/public-windows/install_location.cs packaging/public-windows/setup_wizard.cs
 packaging/public-windows/uninstall.cs packaging/public-windows/uninstall-files.txt
+packaging/public-windows/wizard_window.cs packaging/public-windows/uninstall_wizard.cs
 tests/documents/test_hwp_objects.py tools/build/generate_icon.py
 tools/build/build_public_windows.py tools/build/build_windows_uninstaller.py
 tools/build/windows_runtime_bundle.py
@@ -189,8 +190,10 @@ def build(output, runtime_dir=None, vendor_cache=None):
             "/resource:setup.zip,magic-converter-setup.zip",
             "/resource:runtime.zip,magic-converter-runtime.zip", "runtime.cs",
             "/resource:engines.zip,magic-converter-engines.zip",
+            "/resource:" + str(ROOT / "assets/magic_converter-tool.ico") + ",magic-converter-wizard.ico",
             str(ROOT / "packaging/public-windows/install_location.cs"),
             str(ROOT / "packaging/public-windows/setup_wizard.cs"),
+            str(ROOT / "packaging/public-windows/wizard_window.cs"),
         )
         if setup.read_bytes().count(payload) != 1:
             raise ValueError("Setup does not contain the exact generated application archive")

@@ -1,12 +1,10 @@
 using System;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 internal static class Setup
@@ -42,25 +40,23 @@ internal static class Setup
             var destination = FindExisting(root, saved);
             if (destination == null)
             {
-                var source = "설치 EXE에 포함된 Python, 필수 라이브러리, FFmpeg·FFprobe와 rhwp를 설치합니다.";
                 var defaultParent = InstallLocation.DefaultParent(root, Version);
                 var parent = saved == null || InstallLocation.Same(saved.Folder, defaultParent)
                     ? defaultParent : Path.GetDirectoryName(saved.Folder);
-                using (var wizard = new SetupWizard(root, Version, parent, source, ReadLicense()))
+                using (var wizard = new SetupWizard(root, Version, parent, ReadLicense(), LogPath(root),
+                    (folder, report) => CreateShortcutWithWarning(InstallAt(root, folder, report))))
                 {
-                    if (wizard.ShowDialog() != DialogResult.OK)
-                        return 2;
+                    wizard.ShowDialog();
+                    if (wizard.ExitCode != 0 || !wizard.LaunchAfterInstall)
+                        return wizard.ExitCode;
                     destination = wizard.Destination;
                 }
-                ShowProgress(stage => InstallAt(root, destination, stage));
             }
-            try
+            else
             {
-                CreateShortcut(destination, Environment.GetFolderPath(Environment.SpecialFolder.Programs));
-            }
-            catch (Exception error)
-            {
-                MessageBox.Show("시작 메뉴 바로가기를 만들지 못했습니다.\n" + destination + "\n\n" + error.Message, Title);
+                var warning = CreateShortcutWithWarning(destination);
+                if (warning != null)
+                    MessageBox.Show(warning, Title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             using (Launch(destination)) { }
             return 0;
@@ -87,32 +83,17 @@ internal static class Setup
         }
     }
 
-    private static void ShowProgress(Action<Action<string>> operation)
+    private static string CreateShortcutWithWarning(string folder)
     {
-        Exception failure = null;
-        using (var window = new Form
+        try
         {
-            Text = Title, StartPosition = FormStartPosition.CenterScreen, ClientSize = new Size(470, 96),
-            FormBorderStyle = FormBorderStyle.FixedDialog, ControlBox = false
-        })
-        using (var label = new Label { Text = "설치 준비 중", Location = new Point(18, 14), Size = new Size(434, 27) })
-        using (var progress = new ProgressBar { Style = ProgressBarStyle.Marquee, Location = new Point(18, 51), Size = new Size(434, 20) })
-        {
-            window.Controls.Add(label);
-            window.Controls.Add(progress);
-            window.Shown += async (sender, args) =>
-            {
-                try
-                {
-                    await Task.Run(() => operation(stage => window.BeginInvoke((Action)(() => label.Text = stage))));
-                }
-                catch (Exception error) { failure = error; }
-                finally { window.Close(); }
-            };
-            window.ShowDialog();
+            CreateShortcut(folder, Environment.GetFolderPath(Environment.SpecialFolder.Programs));
+            return null;
         }
-        if (failure != null)
-            throw failure;
+        catch (Exception error)
+        {
+            return "시작 메뉴 바로가기를 만들지 못했습니다.\n" + folder + "\n\n" + error.Message;
+        }
     }
 
     internal static bool Ready(string folder)

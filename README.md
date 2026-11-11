@@ -8,7 +8,7 @@
 
 ## EXE로 시작하기
 
-ZIP에는 설치 마법사 `MagicConverter-Setup.exe`와 제거 마법사 `Uninstall.exe`가 들어 있습니다. 압축을 푼 뒤 설치 마법사를 실행합니다. [MagicConverter 2.2.32 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.32/MagicConverter-2.2.32-Windows-x64.zip)
+ZIP에는 설치 마법사 `MagicConverter-Setup.exe`와 제거 마법사 `Uninstall.exe`가 들어 있습니다. 압축을 푼 뒤 설치 마법사를 실행합니다. [MagicConverter 2.2.33 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.33/MagicConverter-2.2.33-Windows-x64.zip)
 
 Windows 10·11 64비트용이며, 설치 마법사가 내장된 Python, 필수 라이브러리, FFmpeg·FFprobe와 rhwp를 설치합니다. 인터넷 연결 없이 설치할 수 있습니다.
 
@@ -16,7 +16,7 @@ Windows 10·11 64비트용이며, 설치 마법사가 내장된 Python, 필수 �
 2. 설치 폴더를 고르고 확인한 뒤 **설치**를 누릅니다.
 3. 앱이 열리면 탐색기에서 파일을 드래그하고 <kbd>Shift</kbd>를 눌러 변환 형식을 선택합니다. <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
 
-[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.32)
+[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.33)
 
 <p align="center">
   <img src="assets/readme/demo.gif" alt="JPG를 휠로 끌어 PNG로 변환하는 예" width="100%">
@@ -36,7 +36,7 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 
 ## 지원 확장자와 변환 가능 목록
 
-2.2.32에 등록된 **79종·89개 확장자 표기** 전체입니다. 입력 확장자 88개와 출력 전용 `.html`을 포함합니다. 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
+2.2.33에 등록된 **79종·89개 확장자 표기** 전체입니다. 입력 확장자 88개와 출력 전용 `.html`을 포함합니다. 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
 
 **변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상이고, **CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. 필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. 여러 파일을 함께 놓으면 공통 대상만 표시됩니다. 실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
 

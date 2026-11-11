@@ -34,6 +34,7 @@ internal static class Uninstaller
         if (args.Length != 0)
             return 2;
         Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
         if (String.IsNullOrEmpty(local) || String.IsNullOrEmpty(programs))
@@ -41,25 +42,16 @@ internal static class Uninstaller
         try
         {
             var folder = InstalledFolder(local);
-            var accepted = MessageBox.Show(
-                "현재 Windows 계정의 MagicConverter " + Version + "를 제거할까요?\n\n" +
-                "설치 위치\n" + folder + "\n\n" +
-                "설치 파일, 앱 전용 Python, 기본 설정, 변환 기록, 감시 설정과 로그를 지웁니다.\n" +
-                "원본 문서, 변환 결과와 별도 설치한 도구는 보존합니다.\n\n" +
-                "실행 중인 변환을 마치고 MagicConverter를 종료한 뒤 진행하세요.",
-                Title, MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
-            if (accepted != DialogResult.Yes)
-                return 2;
-            using (var native = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64))
-            using (var redirected = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry32))
+            using (var wizard = new UninstallWizard(Version, folder, () =>
             {
-                var kept = Remove(local, programs, folder, native, redirected);
-                var message = "MagicConverter 제거가 끝났습니다.";
-                if (kept.Count != 0)
-                    message += "\n\n사용자 파일 또는 링크가 있는 다음 폴더는 보존했습니다.\n" + String.Join("\n", kept);
-                MessageBox.Show(message, Title);
+                using (var native = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64))
+                using (var redirected = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry32))
+                    return Remove(local, programs, folder, native, redirected);
+            }))
+            {
+                wizard.ShowDialog();
+                return wizard.ExitCode;
             }
-            return 0;
         }
         catch (Exception error)
         {
