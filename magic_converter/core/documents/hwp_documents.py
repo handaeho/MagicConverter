@@ -51,6 +51,7 @@ class TextRun:
     width_percent: float = 100
     spacing_pt: float = 0
     proportional_tracking_allowed: bool = True
+    page_number: bool = False
 
 
 @dataclass
@@ -89,10 +90,20 @@ class Paragraph:
     first_line_indent: float = 0
     space_before: float = 0
     space_after: float = 0
+    line_spacing: tuple[str, float] | None = None
+    line_height_hint: float | None = None
+    borders: tuple[Border, Border, Border, Border] | None = None
 
     @property
     def text(self) -> str:
         return "".join(run.text for run in self.runs)
+
+
+@dataclass(frozen=True)
+class Border:
+    style: str = "nil"
+    width: float = 0
+    color: str = "000000"
 
 
 @dataclass
@@ -103,6 +114,9 @@ class Cell:
     rowspan: int = 1
     colspan: int = 1
     fill: str | None = None
+    borders: tuple[Border, Border, Border, Border] | None = None
+    margins: tuple[float, float, float, float] | None = None
+    vertical_alignment: str | None = None
 
 
 @dataclass
@@ -112,6 +126,7 @@ class Table:
     cells: list[Cell]
     col_widths: list[float] | None = None
     row_heights: list[float] | None = None
+    alignment: str | None = None
 
     @property
     def text(self) -> str:
@@ -129,6 +144,17 @@ class DocumentData:
     warnings: list[str] = field(default_factory=list)
     headers: list[Paragraph | Table] = field(default_factory=list)
     footers: list[Paragraph | Table] = field(default_factory=list)
+    header_distance: float | None = None
+    footer_distance: float | None = None
+    header_footer_start: int = 0
+    page_number_start: int | None = None
+    header_footer_space: tuple[float, float] = (0, 0)
+
+    @property
+    def body_margins(self) -> tuple[float, float, float, float]:
+        left, right, top, bottom = self.margins
+        header, footer = self.header_footer_space
+        return left, right, round(top + header, 6), round(bottom + footer, 6)
 
     def text(self) -> str:
         pieces = []
@@ -260,8 +286,18 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
     page.set("width", str(round(data.width * 100)))
     page.set("height", str(round(data.height * 100)))
     page_margin = page.find(q("hp", "margin"))
-    for key, value in zip(("left", "right", "top", "bottom"), data.margins):
+    left, right, top, bottom = data.body_margins
+    for key, value in zip(("left", "right"), (left, right)):
         page_margin.set(key, str(round(value * 100)))
+    # Word body margins are measured from the edge. HWPX adds its header
+    # and footer areas to the corresponding edge margins.
+    for edge, area, blocks, distance, margin, reserved in (
+        ("top", "header", data.headers, data.header_distance, top, data.header_footer_space[0]),
+        ("bottom", "footer", data.footers, data.footer_distance, bottom, data.header_footer_space[1]),
+    ):
+        offset = min(margin, max(0, 36 if distance is None else distance)) if blocks or reserved else margin
+        page_margin.set(edge, str(round(offset * 100)))
+        page_margin.set(area, str(round((margin - offset) * 100)))
     chars = header.find(".//" + q("hh", "charProperties"))
     base_char = copy.deepcopy(chars[0])
     style_ids: dict[tuple, str] = {}
@@ -271,7 +307,7 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
     counter = 0
     image_assets = {}
     para_properties = header.find(".//" + q("hh", "paraProperties"))
-    paragraph_styles = {("left", 0, 0, 0, 0, 0): "0"}
+    paragraph_styles = {("left", 0, 0, 0, 0, 0, None, None): "0"}
 
     def child(parent, tag: str, **attrs):
         return ET.SubElement(parent, q("hp", tag), {k: str(v) for k, v in attrs.items()})
@@ -316,7 +352,7 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
 
     def para_style(source):
         from magic_converter.core.documents.paragraph_layout import FIELDS, HWPX_FIELDS
-        key = (source.alignment, *(getattr(source, name) for name in FIELDS))
+        key = (source.alignment, *(getattr(source, name) for name in FIELDS), source.line_spacing, source.borders)
         if key not in paragraph_styles:
             node = copy.deepcopy(para_properties[0])
             identifier = str(max(int(p.get("id", "0")) for p in para_properties) + 1)
@@ -330,6 +366,15 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
                     if metric is not None:
                         metric.set('value', str(round(getattr(source, name) * 100)))
                         metric.set('unit', 'HWPUNIT')
+            if source.line_spacing:
+                kind, value = source.line_spacing
+                for spacing in node.iter(q('hh', 'lineSpacing')):
+                    spacing.attrib.update(type=kind, value=str(round(value * (1 if kind == 'PERCENT' else 100))),
+                                          unit='HWPUNIT')
+            if source.borders is not None:
+                outline = node.find(q("hh", "border"))
+                if outline is not None:
+                    outline.set("borderFillIDRef", border_style(None, source.borders))
             para_properties.append(node)
             para_properties.set("itemCnt", str(len(para_properties)))
             paragraph_styles[key] = identifier
@@ -407,6 +452,10 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
                 picture(child(p, "run", charPrIDRef=0), item, available)
                 continue
             run = child(p, "run", charPrIDRef=style(item))
+            if item.page_number:
+                number = child(child(run, "ctrl"), "autoNum", num=1, numType="PAGE")
+                child(number, "autoNumFormat", type="DIGIT", userChar="", prefixChar="", suffixChar="", supscript=0)
+                continue
             text = child(run, "t")
             parts = re.split(r"(\n|\t)", item.text.replace("\r\n", "\n"))
             text.text = parts[0]
@@ -425,20 +474,26 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
             edge.attrib.update(type="SOLID", width="0.12 mm", color="#000000")
     borderfills.append(border)
     borderfills.set("itemCnt", str(len(borderfills)))
-    fill_ids = {}
-    def cell_border(fill):
-        if not fill:
+    from magic_converter.core.documents.table_layout import EDGES, hwpx_edge_attributes
+    cell_styles = {}
+    def border_style(fill, edges):
+        if not fill and edges is None:
             return border_id
-        if fill not in fill_ids:
+        key = (fill, edges)
+        if key not in cell_styles:
             node = copy.deepcopy(border)
             identifier = str(max(int(b.get("id", "0")) for b in borderfills) + 1)
             node.set("id", identifier)
-            brush = ET.SubElement(node, q("hc", "fillBrush"))
-            ET.SubElement(brush, q("hc", "winBrush"), faceColor="#" + fill, hatchColor="#000000", alpha="0")
+            if edges is not None:
+                for name, edge in zip(EDGES, edges):
+                    node.find(q("hh", name + "Border")).attrib.update(hwpx_edge_attributes(edge))
+            if fill:
+                brush = ET.SubElement(node, q("hc", "fillBrush"))
+                ET.SubElement(brush, q("hc", "winBrush"), faceColor="#" + fill, hatchColor="#000000", alpha="0")
             borderfills.append(node)
             borderfills.set("itemCnt", str(len(borderfills)))
-            fill_ids[fill] = identifier
-        return fill_ids[fill]
+            cell_styles[key] = identifier
+        return cell_styles[key]
 
     available_width = max(1000, round((data.width - data.margins[0] - data.margins[1]) * 100))
     def write_blocks(parent, content, available):
@@ -446,7 +501,7 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
         if isinstance(block, Paragraph):
             paragraph(parent, block, available)
             continue
-        anchor = paragraph(parent, Paragraph(), available)
+        anchor = paragraph(parent, Paragraph(alignment=block.alignment or "left"), available)
         run = child(anchor, "run", charPrIDRef=0)
         widths = [w * 100 for w in block.col_widths] if block.col_widths else [available / block.cols] * block.cols
         scale = min(1, available / max(1, sum(widths)))
@@ -463,17 +518,19 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
         for r in range(block.rows):
             row = child(table, "tr")
             for cell in sorted((c for c in block.cells if c.row == r), key=lambda c: c.col):
-                tc = child(row, "tc", name="", header=0, hasMargin=0, protect=0, editable=0, dirty=0, borderFillIDRef=cell_border(cell.fill))
-                body = child(tc, "subList", id="", textDirection="HORIZONTAL", lineWrap="BREAK", vertAlign="CENTER",
+                tc = child(row, "tc", name="", header=0, hasMargin=int(cell.margins is not None), protect=0, editable=0, dirty=0,
+                           borderFillIDRef=border_style(cell.fill, cell.borders))
+                body = child(tc, "subList", id="", textDirection="HORIZONTAL", lineWrap="BREAK", vertAlign=(cell.vertical_alignment or "center").upper(),
                              linkListIDRef=0, linkListNextIDRef=0, textWidth=0, textHeight=0, hasTextRef=0, hasNumRef=0)
                 width, height = sum(widths[cell.col:cell.col + cell.colspan]), sum(heights[cell.row:cell.row + cell.rowspan])
-                write_blocks(body, cell.paragraphs, max(100, width - 566))
+                margins = tuple(round(v * 100) for v in cell.margins) if cell.margins is not None else (283, 283, 141, 141)
+                write_blocks(body, cell.paragraphs, max(100, width - margins[0] - margins[1]))
                 child(tc, "cellAddr", colAddr=cell.col, rowAddr=cell.row)
                 child(tc, "cellSpan", colSpan=cell.colspan, rowSpan=cell.rowspan)
                 child(tc, "cellSz", width=round(width), height=round(height))
-                child(tc, "cellMargin", left=283, right=283, top=141, bottom=141)
+                child(tc, "cellMargin", **dict(zip(EDGES, margins)))
     write_blocks(section, data.blocks, available_width)
-    first = section.find(q("hp", "p"))
+    first = section[min(data.header_footer_start, len(section) - 1)]
     for name, content in (("header", data.headers), ("footer", data.footers)):
         if content:
             ctrl = child(child(first, "run", charPrIDRef=0), "ctrl")
@@ -481,6 +538,9 @@ def write_hwpx(data: DocumentData, destination: Path) -> None:
             body = child(target, "subList", id="", textDirection="HORIZONTAL", lineWrap="BREAK", vertAlign="TOP",
                          linkListIDRef=0, linkListNextIDRef=0, textWidth=0, textHeight=0, hasTextRef=0, hasNumRef=0)
             write_blocks(body, content, available_width)
+    if data.page_number_start is not None:
+        control = child(child(first, "run", charPrIDRef=0), "ctrl")
+        child(control, "newNum", num=data.page_number_start, numType="PAGE")
     files["Contents/header.xml"] = serialize(header, files["Contents/header.xml"])
     files["Contents/section0.xml"] = serialize(section, files["Contents/section0.xml"])
     package = ET.fromstring(files["Contents/content.hpf"])

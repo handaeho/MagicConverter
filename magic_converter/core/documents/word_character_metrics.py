@@ -65,6 +65,28 @@ class WordCharacterMetrics:
             if len(found) == 2:
                 break
         result = {}
+        # A run may carry only tracking while its visible font and size come
+        # from a character style, paragraph style, or the document defaults.
+        east_asian = any(0x1100 <= ord(c) <= 0x11FF or 0x2E80 <= ord(c) <= 0xD7FF
+                         or 0xF900 <= ord(c) <= 0xFAFF for c in run.text)
+        scripts = ('eastAsia', 'ascii', 'hAnsi') if east_asian else ('ascii', 'hAnsi', 'eastAsia')
+        font_layers = [layer.find(qn('w:rFonts')) for layer in layers if layer is not None]
+        face = next((node.get(qn('w:' + key)) for key in scripts for node in font_layers
+                     if node is not None and node.get(qn('w:' + key))), None)
+        if face:
+            result['font'] = face
+        for tag, name in (('sz', 'size'), ('b', 'bold'), ('i', 'italic'), ('color', 'color')):
+            prop = next((node for layer in layers if layer is not None
+                         and (node := layer.find(qn('w:' + tag))) is not None), None)
+            if prop is None:
+                continue
+            raw = prop.get(qn('w:val'), '')
+            if tag == 'sz' and raw.isdecimal():
+                result[name] = max(1, int(raw) / 2)
+            elif tag in {'b', 'i'}:
+                result[name] = raw not in {'0', 'false', 'off'}
+            elif tag == 'color' and len(raw) == 6:
+                result[name] = raw
         if (run.font.name or '').casefold() == 'tahoma':
             fonts = props.find(qn('w:rFonts'))
             paragraph_layers = [pprops, *(ppr for _, ppr in para_styles)]

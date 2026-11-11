@@ -12,6 +12,13 @@ def hwpx_layout(prop, warnings):
         # Prefer the supported fallback over HwpUnitChar alternatives.
         margin = prop.find('.//' + q('hp', 'default') + '/' + q('hh', 'margin'))
     result = {}
+    spacing = prop.find(q('hh', 'lineSpacing'))
+    if spacing is None:
+        spacing = prop.find('.//' + q('hp', 'default') + '/' + q('hh', 'lineSpacing'))
+    if spacing is not None:
+        kind, value = spacing.get('type'), spacing.get('value', '')
+        if spacing.get('unit') == 'HWPUNIT' and value.isdecimal() and kind in {'PERCENT', 'FIXED', 'AT_LEAST'}:
+            result['line_spacing'] = kind, int(value) / (1 if kind == 'PERCENT' else 100)
     if margin is None:
         return result
     for name, tag in HWPX_FIELDS.items():
@@ -47,4 +54,24 @@ def word_layout(paragraph):
             points = value.pt
             if math.isfinite(points):
                 result[name] = points
+    rule, value = None, None
+    style, seen = paragraph.style, set()
+    formats = [paragraph.paragraph_format]
+    while style is not None and style.style_id not in seen and len(seen) < 64:
+        seen.add(style.style_id)
+        formats.append(style.paragraph_format)
+        style = style.base_style
+    for fmt in formats:
+        if value is None:
+            value = fmt.line_spacing
+        if rule is None:
+            rule = fmt.line_spacing_rule
+        if value is not None and rule is not None:
+            break
+    if value is not None:
+        from docx.enum.text import WD_LINE_SPACING
+        if isinstance(value, float):
+            result['line_spacing'] = 'PERCENT', value * 100
+        else:
+            result['line_spacing'] = ('AT_LEAST' if rule == WD_LINE_SPACING.AT_LEAST else 'FIXED', value.pt)
     return result

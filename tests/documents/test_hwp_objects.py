@@ -21,7 +21,7 @@ import pymupdf as fitz
 from magic_converter.core.conversion.converter import ConversionError
 from magic_converter.core.conversion.extended_converter import convert_extended
 from magic_converter.core.conversion.file_router import ALL_ACTIONS
-from magic_converter.core.documents.hwp_documents import (Cell, DocumentData, Paragraph, Picture, Table, TextRun,
+from magic_converter.core.documents.hwp_documents import (Border, Cell, DocumentData, Paragraph, Picture, Table, TextRun,
                                                    read_hwp, read_hwpx, read_docx, write_hwpx, write_docx)
 from magic_converter.core.documents.rich_hwp import object_counts, walk_blocks
 
@@ -153,6 +153,71 @@ class HwpObjectTests(unittest.TestCase):
             self.assertGreaterEqual(sum(len(p.get_images()) for p in pdf), 1)
             self.assertIn("Merged", "".join(p.get_text() for p in pdf))
         self.assertTrue(notices)
+
+    def test_word_body_height_and_inherited_font_survive_hwpx_export(self):
+        from docx import Document
+        from docx.shared import Pt
+
+        doc = Document()
+        section = doc.sections[0]
+        section.top_margin, section.bottom_margin = Pt(49), Pt(14)
+        doc.styles["Normal"].font.size = Pt(19)
+        doc.styles["Normal"].font.name = "Batang"
+        paragraph = doc.add_paragraph("Title")
+        paragraph.paragraph_format.line_spacing = Pt(24)
+        source, output = self.root / "layout.docx", self.root / "layout.hwpx"
+        doc.save(source)
+        write_hwpx(read_docx(source), output)
+        with zipfile.ZipFile(output) as package:
+            page = ET.fromstring(package.read("Contents/section0.xml")).find(".//{*}pagePr")
+            margins = page.find("{*}margin")
+            self.assertEqual([margins.get(key) for key in ("top", "bottom", "header", "footer")],
+                             ["4900", "1400", "0", "0"])
+        title = read_hwpx(output).blocks[0]
+        self.assertEqual((title.runs[0].size, title.runs[0].font, title.line_spacing),
+                         (19, "Batang", ("FIXED", 24)))
+
+    def test_hwpx_late_footer_keeps_only_source_border_and_live_page_number(self):
+        from docx import Document
+        from docx.oxml.ns import qn
+
+        footer = Table(1, 1, [Cell(0, 0, [Paragraph([TextRun("1", page_number=True)])],
+                                   borders=(Border(), Border(), Border("single", 1), Border()))])
+        cover = Paragraph([TextRun("Cover")], borders=(Border(), Border(), Border(), Border("single", 2)))
+        data = DocumentData([cover, Paragraph([TextRun("Main")], page_break_before=True)],
+                            footers=[footer], header_footer_start=1, page_number_start=1)
+        source, output = self.root / "footer.hwpx", self.root / "footer.docx"
+        write_hwpx(data, source)
+        write_docx(read_hwpx(source), output)
+        doc = Document(output)
+        border = doc.paragraphs[0]._p.pPr.find(qn("w:pBdr")).find(qn("w:bottom"))
+        self.assertEqual(border.get(qn("w:sz")), "16")
+        self.assertEqual(len(doc.sections), 2)
+        self.assertFalse(doc.sections[0].footer._has_definition)
+        section = doc.sections[1]
+        self.assertEqual(section._sectPr.find(qn("w:pgNumType")).get(qn("w:start")), "1")
+        cell = section.footer.tables[0].cell(0, 0)
+        edges = cell._tc.tcPr.find(qn("w:tcBorders"))
+        self.assertEqual({node.tag: node.get(qn("w:val")) for node in edges},
+                         {qn("w:" + name): style for name, style in
+                          (("top", "single"), ("left", "nil"), ("bottom", "nil"), ("right", "nil"))})
+        self.assertEqual(cell._tc.xpath(".//w:fldSimple")[0].get(qn("w:instr")), "PAGE")
+
+    def test_hwpx_picture_crop_uses_image_dimensions_not_shape_size(self):
+        original, adjusted = self.root / "shape.hwpx", self.root / "different-image-size.hwpx"
+        write_hwpx(self.fixture(), original)
+        with zipfile.ZipFile(original) as archive, zipfile.ZipFile(adjusted, "w") as output:
+            for name in archive.namelist():
+                data = archive.read(name)
+                if name == "Contents/section0.xml":
+                    root = ET.fromstring(data)
+                    picture = root.find(".//{*}pic")
+                    original_size = picture.find("{*}orgSz")
+                    original_size.set("height", str(2 * int(original_size.get("height"))))
+                    data = ET.tostring(root)
+                output.writestr(name, data)
+        picture = next(block for block in walk_blocks(read_hwpx(adjusted).blocks) if isinstance(block, Picture))
+        self.assertAlmostEqual(picture.crop[1], .1, places=4)
 
     @unittest.skipUnless(USER_HWP.exists() and USER_HWPX.exists(), "User-provided regression documents are local only")
     def test_supplied_documents_keep_every_table_and_picture_without_modifying_originals(self):

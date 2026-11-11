@@ -21,6 +21,8 @@ from magic_converter.core.jobs.raw_api import bounded_raw
 from magic_converter.core.jobs.job_control import check_cancelled
 from magic_converter.core.documents.hwp_documents import (Cell, DocumentData, Paragraph, Picture, Equation, Table, TextRun,
                                MAX_XML, _xml, _section_names, local, q)
+from magic_converter.core.documents.table_layout import (EDGES, hwpx_borders, hwpx_margins, word_border, word_border_element,
+                                                          word_cell_borders, word_cell_margins)
 
 
 def walk_blocks(blocks):
@@ -380,7 +382,7 @@ def _hwpx_text_runs(text, style):
 def read_hwpx_rich(source: Path) -> DocumentData:
     result = DocumentData()
     with zipfile.ZipFile(source) as archive:
-        styles, alignments, fills, layouts = {}, {}, {}, {}
+        styles, alignments, fills, layouts, borders, paragraph_borders = {}, {}, {}, {}, {}, {}
         if "Contents/header.xml" in archive.namelist():
             header = _xml(archive, "Contents/header.xml")
             fonts = {face.get('lang', '').lower(): {font.get('id'): font.get('face', '맑은 고딕') for font in face}
@@ -415,7 +417,11 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                 layouts[prop.get('id')] = hwpx_layout(prop, result.warnings)
                 align = prop.find(q("hh", "align"))
                 alignments[prop.get("id")] = align.get("horizontal", "LEFT").lower() if align is not None else "left"
+                outline = prop.find(q("hh", "border"))
+                if outline is not None:
+                    paragraph_borders[prop.get("id")] = outline.get("borderFillIDRef")
             for border in header.iter(q("hh", "borderFill")):
+                borders[border.get("id")] = hwpx_borders(border)
                 brush = border.find(".//" + q("hc", "winBrush"))
                 if brush is not None and re.fullmatch(r"#[0-9a-fA-F]{6}", brush.get("faceColor", "")):
                     fills[border.get("id")] = brush.get("faceColor")[1:]
@@ -448,9 +454,13 @@ def read_hwpx_rich(source: Path) -> DocumentData:
             height = float(size.get("height", "0")) / 100 if size is not None else 0
             crop = (0, 0, 0, 0)
             clip, original = node.find(q("hp", "imgClip")), node.find(q("hp", "orgSz"))
+            dimensions = node.find(q("hp", "imgDim"))
             if clip is not None and original is not None:
                 ow, oh = float(original.get("width", "0")), float(original.get("height", "0"))
-                if ow and oh:
+                if dimensions is not None:
+                    ow = float(dimensions.get("dimwidth", "0")) or ow
+                    oh = float(dimensions.get("dimheight", "0")) or oh
+                if ow > 0 and oh > 0:
                     crop = (max(0, float(clip.get("left", "0")) / ow), max(0, float(clip.get("top", "0")) / oh),
                             max(0, 1 - float(clip.get("right", str(ow))) / ow), max(0, 1 - float(clip.get("bottom", str(oh))) / oh))
             return Picture(data, width or w * 0.75, height or h * 0.75, PurePosixPath(name).name, crop)
@@ -461,6 +471,9 @@ def read_hwpx_rich(source: Path) -> DocumentData:
             blocks, runs = [], []
             alignment = alignments.get(node.get("paraPrIDRef"), "left")
             layout = layouts.get(node.get('paraPrIDRef'), {})
+            outline = borders.get(paragraph_borders.get(node.get("paraPrIDRef")))
+            if outline and any(edge.style != "nil" for edge in outline):
+                layout = {**layout, "borders": outline}
             def flush():
                 if any(isinstance(run, Picture) or run.text for run in runs):
                     blocks.append(Paragraph(list(runs), alignment, **layout))
@@ -468,8 +481,18 @@ def read_hwpx_rich(source: Path) -> DocumentData:
             def visit(element, style):
                 tag = local(element)
                 if tag == "tbl":
-                    flush()
-                    blocks.append(table(element, depth + 1))
+                    # Space padding before an inline table belongs to its
+                    # anchor line, so it must not become a separate Word line.
+                    position = element.find(q("hp", "pos"))
+                    if position is not None and position.get("treatAsChar") == "1" and all(
+                        isinstance(run, TextRun) and not run.text.strip() and not run.page_number for run in runs
+                    ):
+                        runs.clear()
+                    else:
+                        flush()
+                    obj = table(element, depth + 1)
+                    obj.alignment = alignment
+                    blocks.append(obj)
                 elif tag == "pic":
                     runs.append(picture(element))
                 elif tag == "equation":
@@ -490,6 +513,9 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                     for control in element:
                         text += {"lineBreak": "\n", "tab": "\t", "nbSpace": " "}.get(local(control), "") + (control.tail or "")
                     runs.extend(_hwpx_text_runs(text, style))
+                elif tag == "autoNum" and element.get("numType") == "PAGE":
+                    number = _hwpx_text_runs(element.get("num") or "1", style)[0]
+                    runs.append(replace(number, page_number=True))
                 elif tag in {"header", "footer"}:
                     body = element.find(q("hp", "subList"))
                     destination = result.headers if tag == "header" else result.footers
@@ -509,7 +535,31 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                 for element in run:
                     visit(element, styles.get(run.get("charPrIDRef", "0"), {}))
             flush()
-            blocks = blocks or [Paragraph([], alignment, **layout)]
+            segments = node.findall(q("hp", "linesegarray") + "/" + q("hp", "lineseg"))
+            heights = set()
+            for segment in segments:
+                try:
+                    height = (int(segment.get("vertsize", "0")) + int(segment.get("spacing", "0"))) / 100
+                except ValueError:
+                    break
+                if not 0 < height <= 500:
+                    break
+                heights.add(height)
+            else:
+                if len(heights) == 1 and len(blocks) <= 1 and all(isinstance(block, Paragraph) for block in blocks):
+                    height, = heights
+                    if not blocks or all(isinstance(run, TextRun) and run.size <= height for run in blocks[0].runs):
+                        if blocks:
+                            blocks[0].line_height_hint = height
+                        else:
+                            layout = {**layout, "line_height_hint": height}
+            if not blocks:
+                # Empty HWP paragraphs still occupy the height of their own
+                # character style. The Word default font changes that height.
+                run = node.find(q("hp", "run"))
+                default = styles.get(run.get("charPrIDRef"), {}) if run is not None else {}
+                empty = _hwpx_text_runs("", default)
+                blocks = [Paragraph(empty, alignment, **layout)]
             if node.get("pageBreak") == "1":
                 if isinstance(blocks[0], Paragraph):
                     blocks[0].page_break_before = True
@@ -520,16 +570,20 @@ def read_hwpx_rich(source: Path) -> DocumentData:
         def table(node, depth):
             rows, cols = int(node.get("rowCnt", "1")), int(node.get("colCnt", "1"))
             cells, sizes = [], []
+            table_margins = hwpx_margins(node.find(q("hp", "inMargin")))
             for r, row in enumerate(node.findall(q("hp", "tr"))):
                 for c, element in enumerate(row.findall(q("hp", "tc"))):
                     addr, span = element.find(q("hp", "cellAddr")), element.find(q("hp", "cellSpan"))
                     size = element.find(q("hp", "cellSz"))
                     body = element.find(q("hp", "subList"))
+                    style = element.get("borderFillIDRef")
                     cell = Cell(int(addr.get("rowAddr", r)) if addr is not None else r,
                                 int(addr.get("colAddr", c)) if addr is not None else c, [],
                                 int(span.get("rowSpan", "1")) if span is not None else 1,
                                 int(span.get("colSpan", "1")) if span is not None else 1,
-                                fills.get(element.get("borderFillIDRef")))
+                                fills.get(style), borders.get(style),
+                                hwpx_margins(element.find(q("hp", "cellMargin"))) if element.get("hasMargin") == "1" else table_margins,
+                                body.get("vertAlign", "TOP").lower() if body is not None else None)
                     if body is not None:
                         for p in body.findall(q("hp", "p")):
                             cell.paragraphs.extend(paragraph(p, depth + 1))
@@ -566,9 +620,22 @@ def read_hwpx_rich(source: Path) -> DocumentData:
                 result.width, result.height = float(page.get("width", "59528")) / 100, float(page.get("height", "84186")) / 100
                 margin = page.find(q("hp", "margin"))
                 if margin is not None:
-                    result.margins = tuple(float(margin.get(n, "7200")) / 100 for n in ("left", "right", "top", "bottom"))
+                    left, right, top, bottom = (float(margin.get(n, "7200")) / 100 for n in ("left", "right", "top", "bottom"))
+                    result.margins = left, right, top, bottom
+                    result.header_footer_space = tuple(float(margin.get(name, "0")) / 100
+                                                       for name in ("header", "footer"))
+                    result.header_distance, result.footer_distance = top, bottom
             for p in section.findall(q("hp", "p")):
-                result.blocks.extend(paragraph(p, 0))
+                had_header_footer = bool(result.headers or result.footers)
+                blocks = paragraph(p, 0)
+                if not had_header_footer and (result.headers or result.footers) and p.get("pageBreak") == "1":
+                    result.header_footer_start = len(result.blocks)
+                    for run in p.findall(q("hp", "run")):
+                        for control in run.findall(q("hp", "ctrl")):
+                            restart = control.find(q("hp", "newNum"))
+                            if restart is not None and restart.get("numType") == "PAGE" and restart.get("num", "").isdecimal():
+                                result.page_number_start = int(restart.get("num"))
+                result.blocks.extend(blocks)
         actual = object_counts(result)
         if actual != {"tables": expected_tables, "pictures": expected_pictures}:
             pass
@@ -598,7 +665,9 @@ def read_docx_rich(source: Path) -> DocumentData:
     doc = Document(source)
     section = doc.sections[0]
     result = DocumentData(width=section.page_width.pt, height=section.page_height.pt,
-        margins=tuple(getattr(section, name).pt for name in ("left_margin", "right_margin", "top_margin", "bottom_margin")))
+        margins=tuple(getattr(section, name).pt for name in ("left_margin", "right_margin", "top_margin", "bottom_margin")),
+        header_distance=section.header_distance.pt if section.header_distance is not None else None,
+        footer_distance=section.footer_distance.pt if section.footer_distance is not None else None)
     from magic_converter.core.documents.word_character_metrics import WordCharacterMetrics
     character_metrics = WordCharacterMetrics(doc.styles.element, result.warnings)
     if len(doc.sections) > 1:
@@ -619,6 +688,8 @@ def read_docx_rich(source: Path) -> DocumentData:
                 items.append(Run(node, p))
             elif local(node) == "hyperlink":
                 items.extend(Run(c, p) for c in node if local(c) == "r")
+            elif local(node) == "fldSimple" and node.get(qn("w:instr"), "").strip().upper() == "PAGE":
+                items.extend(Run(c, p) for c in node if local(c) == "r")
         for item in items:
             if isinstance(item, ET.Element) or hasattr(item, "tag"):
                 equations = [item] if local(item) == "oMath" else [n for n in item if local(n) == "oMath"]
@@ -633,6 +704,10 @@ def read_docx_rich(source: Path) -> DocumentData:
                 style = dict(size=font.size.pt if font.size else 10, bold=bool(run.bold), italic=bool(run.italic),
                              color=str(font.color.rgb) if font.color.rgb else "000000", font=font.name or "맑은 고딕")
                 style.update(character_metrics(run, p))
+                field = run._r.getparent()
+                if field.tag == qn("w:fldSimple"):
+                    runs.append(TextRun(run.text or "1", page_number=True, **style))
+                    continue
                 for child in run._r:
                     if child.tag == qn("w:t"):
                         runs.append(TextRun(child.text or "", **style))
@@ -654,9 +729,18 @@ def read_docx_rich(source: Path) -> DocumentData:
                             runs.append(Picture(part.blob, width, height, Path(str(part.partname)).name, crop))
                     elif local(child) == "oMath":
                         runs.append(from_omml(child))
+        if not runs and p._p.pPr is not None:
+            size = p._p.pPr.find(qn("w:rPr") + "/" + qn("w:sz"))
+            if size is not None and size.get(qn("w:val"), "").isdecimal():
+                runs.append(TextRun("", size=max(1, int(size.get(qn("w:val"))) / 2)))
         alignment = {1: "center", 2: "right", 3: "justify"}.get(p.alignment, "left")
         from magic_converter.core.documents.paragraph_layout import word_layout
-        return Paragraph(runs, alignment, bool(p.paragraph_format.page_break_before), **word_layout(p))
+        layout = word_layout(p)
+        if p._p.pPr is not None:
+            outline = p._p.pPr.find(qn("w:pBdr"))
+            if outline is not None:
+                layout["borders"] = tuple(word_border(outline.find(qn("w:" + edge))) for edge in EDGES)
+        return Paragraph(runs, alignment, bool(p.paragraph_format.page_break_before), **layout)
 
     def blocks(container):
         result = []
@@ -664,6 +748,20 @@ def read_docx_rich(source: Path) -> DocumentData:
             if isinstance(block, WordParagraph):
                 result.append(paragraph(block))
             elif isinstance(block, WordTable):
+                props = block._tbl.tblPr
+                table_borders = props.find(qn("w:tblBorders"))
+                table_margins = props.find(qn("w:tblCellMar"))
+                style, seen = block.style, set()
+                while style is not None and style.style_id not in seen and len(seen) < 64:
+                    seen.add(style.style_id)
+                    inherited = style.element.find(qn("w:tblPr"))
+                    if inherited is not None:
+                        if table_borders is None:
+                            table_borders = inherited.find(qn("w:tblBorders"))
+                        if table_margins is None:
+                            table_margins = inherited.find(qn("w:tblCellMar"))
+                    style = style.base_style
+                rows, cols = len(block.rows), len(block.columns)
                 positions, sources = {}, {}
                 for r, row in enumerate(block.rows):
                     for c, cell in enumerate(row.cells, start=row.grid_cols_before):
@@ -673,20 +771,27 @@ def read_docx_rich(source: Path) -> DocumentData:
                 for identity, coords in positions.items():
                     r, c = min(coords)
                     source_cell = sources[identity]
-                    shade = source_cell._tc.get_or_add_tcPr().find(qn("w:shd"))
+                    properties = source_cell._tc.tcPr
+                    shade = properties.find(qn("w:shd")) if properties is not None else None
                     fill = shade.get(qn("w:fill")) if shade is not None else None
                     fill = fill if fill and re.fullmatch(r"[0-9A-Fa-f]{6}", fill) else None
-                    cells.append(Cell(r, c, blocks(source_cell), max(a for a, _ in coords) - r + 1,
-                                      max(b for _, b in coords) - c + 1, fill))
+                    rowspan, colspan = max(a for a, _ in coords) - r + 1, max(b for _, b in coords) - c + 1
+                    edges = word_cell_borders(properties, table_borders, r, c, rowspan, colspan, rows, cols)
+                    vertical = {1: "center", 3: "bottom"}.get(source_cell.vertical_alignment, "top")
+                    cells.append(Cell(r, c, blocks(source_cell), rowspan, colspan, fill, edges,
+                                      word_cell_margins(properties, table_margins), vertical))
                 widths = [col.width.pt if col.width else 72 for col in block.columns]
                 heights = [row.height.pt if row.height else 12 for row in block.rows]
-                result.append(Table(len(block.rows), len(block.columns), cells, widths, heights))
+                alignment = {0: "left", 1: "center", 2: "right"}.get(block.alignment)
+                result.append(Table(rows, cols, cells, widths, heights, alignment))
         return result
     result.blocks = blocks(doc)
-    if section.header._has_definition:
-        result.headers = blocks(section.header)
-    if section.footer._has_definition:
-        result.footers = blocks(section.footer)
+    for name, field in (("header", "headers"), ("footer", "footers")):
+        for current in doc.sections:
+            part = getattr(current, name)
+            if part._has_definition:
+                setattr(result, field, blocks(part))
+                break
     expected = sum(local(n) == "oMath" for n in doc.element.iter())
     actual = sum(isinstance(n, Equation) for n in walk_blocks(result.blocks))
     if actual < expected:
@@ -698,15 +803,22 @@ def read_docx_rich(source: Path) -> DocumentData:
 def write_docx_rich(data: DocumentData, destination: Path) -> None:
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.text import WD_LINE_SPACING
+    from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+    from docx.enum.section import WD_SECTION_START
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.shared import Pt, RGBColor
     document = Document()
     section = document.sections[0]
     section.page_width, section.page_height = Pt(data.width), Pt(data.height)
-    left, right, top, bottom = data.margins
+    left, right, top, bottom = data.body_margins
     section.left_margin, section.right_margin = Pt(left), Pt(right)
     section.top_margin, section.bottom_margin = Pt(top), Pt(bottom)
+    if data.header_distance is not None:
+        section.header_distance = Pt(data.header_distance)
+    if data.footer_distance is not None:
+        section.footer_distance = Pt(data.footer_distance)
     document.styles["Normal"].font.name = "맑은 고딕"
     document.styles["Normal"].font.size = Pt(10)
 
@@ -715,8 +827,25 @@ def write_docx_rich(data: DocumentData, destination: Path) -> None:
         for name in FIELDS:
             setattr(target.paragraph_format, name, Pt(getattr(source, name)))
         target.paragraph_format.page_break_before = source.page_break_before
+        if source.line_height_hint is not None:
+            target.paragraph_format.line_spacing = Pt(source.line_height_hint)
+        elif source.line_spacing:
+            kind, value = source.line_spacing
+            if kind == "PERCENT":
+                if any(isinstance(run, (Picture, Equation)) for run in source.runs):
+                    text_size = max((run.size for run in source.runs if isinstance(run, TextRun)), default=10)
+                    target.paragraph_format.line_spacing = Pt(text_size * value / 100)
+                    target.paragraph_format.line_spacing_rule = WD_LINE_SPACING.AT_LEAST
+                else:
+                    target.paragraph_format.line_spacing = value / 100
+            else:
+                target.paragraph_format.line_spacing = Pt(value)
+                target.paragraph_format.line_spacing_rule = WD_LINE_SPACING.EXACTLY if kind == "FIXED" else WD_LINE_SPACING.AT_LEAST
         target.alignment = {"center": WD_ALIGN_PARAGRAPH.CENTER, "right": WD_ALIGN_PARAGRAPH.RIGHT,
                             "justify": WD_ALIGN_PARAGRAPH.JUSTIFY}.get(source.alignment, WD_ALIGN_PARAGRAPH.LEFT)
+        if source.borders is not None:
+            target._p.get_or_add_pPr().insert_element_before(word_border_element("pBdr", source.borders),
+                                                            "w:shd", "w:tabs", "w:spacing", "w:ind", "w:jc")
         from magic_converter.core.documents.character_spacing import metric_segments
         for item in metric_segments(source.runs,'docx'):
             if isinstance(item, Equation):
@@ -742,6 +871,11 @@ def write_docx_rich(data: DocumentData, destination: Path) -> None:
             run.font.size, run.font.name = Pt(item.size), item.font
             run.font.color.rgb = RGBColor.from_string(item.color if re.fullmatch(r"[0-9A-Fa-f]{6}", item.color) else "000000")
             run._element.get_or_add_rPr().rFonts.set(qn("w:eastAsia"), item.font)
+            if item.page_number:
+                field = OxmlElement("w:fldSimple")
+                field.set(qn("w:instr"), "PAGE")
+                run._r.addprevious(field)
+                field.append(run._r)
             from magic_converter.core.documents.character_spacing import docx_spacing
             spacing = docx_spacing(item)
             if spacing is None:
@@ -758,7 +892,20 @@ def write_docx_rich(data: DocumentData, destination: Path) -> None:
                     metric.set(qn('w:val'), str(value))
                     run._element.get_or_add_rPr().append(metric)
 
-    def blocks(container, content, available, first=None):
+    def blocks(container, content, available, first=None, *, trim_end=False):
+        if container is document:
+            # Blank HWP layout lines immediately before a forced page break
+            # can spill onto a blank Word page after table reflow.
+            stop = trim_end
+            kept = []
+            for block in reversed(content):
+                if stop and isinstance(block, Paragraph) and block.line_height_hint is not None and not block.page_break_before and all(
+                    isinstance(run, TextRun) and not run.text.strip() and not run.page_number for run in block.runs
+                ):
+                    continue
+                kept.append(block)
+                stop = isinstance(block, Paragraph) and block.page_break_before
+            content = reversed(kept)
         for index, block in enumerate(content):
             if isinstance(block, Paragraph):
                 target = first if first is not None and index == 0 else container.add_paragraph()
@@ -768,7 +915,12 @@ def write_docx_rich(data: DocumentData, destination: Path) -> None:
                 table = container.add_table(rows=block.rows, cols=block.cols)
             else:
                 table = container.add_table(rows=block.rows, cols=block.cols, width=Pt(available))
-            table.style, table.autofit = "Table Grid", False
+            table.style = "Normal Table" if any(cell.borders is not None for cell in block.cells) else "Table Grid"
+            table.autofit = False
+            if block.alignment in {"left", "center", "right"}:
+                table.alignment = getattr(WD_TABLE_ALIGNMENT, block.alignment.upper())
+            if first is not None and index == 0 and not hasattr(container, "_tc"):
+                first._p.getparent().remove(first._p)
             widths = block.col_widths or [available / block.cols] * block.cols
             scale = min(1, max(1, available) / max(1, sum(widths)))
             widths = [w * scale for w in widths]
@@ -791,12 +943,47 @@ def write_docx_rich(data: DocumentData, destination: Path) -> None:
                     shade = OxmlElement("w:shd")
                     shade.set(qn("w:fill"), cell.fill)
                     target._tc.get_or_add_tcPr().append(shade)
-                blocks(target, cell.paragraphs or [Paragraph()], max(1, width - 11), target.paragraphs[0])
-    blocks(document, data.blocks, data.width - left - right)
+                props = target._tc.get_or_add_tcPr()
+                if cell.borders is not None:
+                    props.insert_element_before(word_border_element("tcBorders", cell.borders), "w:shd", "w:tcMar", "w:vAlign")
+                if cell.margins is not None:
+                    margins = OxmlElement("w:tcMar")
+                    for name, value in zip(("top", "left", "bottom", "right"),
+                                           (cell.margins[i] for i in (2, 0, 3, 1))):
+                        edge = OxmlElement("w:" + name)
+                        edge.set(qn("w:w"), str(round(value * 20)))
+                        edge.set(qn("w:type"), "dxa")
+                        margins.append(edge)
+                    props.insert_element_before(margins, "w:vAlign")
+                if cell.vertical_alignment in {"top", "center", "bottom"}:
+                    target.vertical_alignment = getattr(WD_CELL_VERTICAL_ALIGNMENT, cell.vertical_alignment.upper())
+                padding = sum(cell.margins[:2]) if cell.margins is not None else 11
+                blocks(target, cell.paragraphs or [Paragraph()], max(1, width - padding), target.paragraphs[0])
+    available = data.width - left - right
+    start = data.header_footer_start
+    if 0 < start < len(data.blocks) and (data.headers or data.footers):
+        blocks(document, data.blocks[:start], available, trim_end=True)
+        section = document.add_section(WD_SECTION_START.NEW_PAGE)
+        separator = document.paragraphs[-1]
+        separator.paragraph_format.space_before = Pt(0)
+        separator.paragraph_format.space_after = Pt(0)
+        separator.paragraph_format.line_spacing = Pt(1)
+        remaining = data.blocks[start:]
+        if isinstance(remaining[0], Paragraph):
+            remaining = [replace(remaining[0], page_break_before=False), *remaining[1:]]
+        blocks(document, remaining, available)
+    else:
+        blocks(document, data.blocks, available)
+    if data.page_number_start is not None:
+        number = OxmlElement("w:pgNumType")
+        number.set(qn("w:start"), str(data.page_number_start))
+        section._sectPr.insert_element_before(number, "w:cols")
     if data.headers:
-        blocks(section.header, data.headers, data.width - left - right, section.header.paragraphs[0])
+        section.header.is_linked_to_previous = False
+        blocks(section.header, data.headers, available, section.header.paragraphs[0])
     if data.footers:
-        blocks(section.footer, data.footers, data.width - left - right, section.footer.paragraphs[0])
+        section.footer.is_linked_to_previous = False
+        blocks(section.footer, data.footers, available, section.footer.paragraphs[0])
     document.save(destination)
 
 
