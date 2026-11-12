@@ -7,12 +7,21 @@ from uuid import uuid4
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QFormLayout,
-    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
-    QSpinBox, QVBoxLayout, QWidget)
+    QFrame, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QPushButton,
+    QScrollArea, QSpinBox, QToolButton, QVBoxLayout, QWidget)
 
 from magic_converter.core.conversion.file_router import ALL_ACTIONS
 from magic_converter.core.settings.preferences import OutputRule, Preferences, ToolOptions
 from magic_converter.core.actions.tool_definitions import TOOL_BY_KEY
+
+
+def add_settings_tab(tabs, content, label):
+    scroll = QScrollArea()
+    scroll.setFrameShape(QFrame.Shape.NoFrame)
+    scroll.setWidgetResizable(True)
+    scroll.setWidget(content)
+    tabs.addTab(scroll, label)
+    return scroll
 
 
 def spin(low, high, value, suffix=""):
@@ -28,6 +37,7 @@ class OutputEditor(QWidget):
         super().__init__()
         form = QFormLayout(self)
         form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.location = QComboBox()
         self.location.addItem("원본 폴더", "source")
         self.location.addItem("지정 폴더", "folder")
@@ -90,13 +100,17 @@ class PreferencesEditor:
         left.addWidget(self.preset_list)
         buttons = QHBoxLayout()
         for label, callback in (("추가", self._add_preset), ("복제", self._copy_preset), ("삭제", self._delete_preset)):
-            button = QPushButton(label)
+            button = QToolButton()
+            button.setText(label)
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             button.clicked.connect(callback)
             buttons.addWidget(button)
         left.addLayout(buttons)
         layout.addLayout(left)
         self.preset_form = QWidget()
         form = QFormLayout(self.preset_form)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         self.preset_name = QLineEdit()
         self.action = QComboBox()
         for action in ALL_ACTIONS.values():
@@ -140,7 +154,7 @@ class PreferencesEditor:
         note.setWordWrap(True)
         form.addRow(note)
         layout.addWidget(self.preset_form, 1)
-        tabs.addTab(self.presets_page, "프리셋")
+        add_settings_tab(tabs, self.presets_page, "프리셋")
 
         self.profiles_page = QWidget()
         layout = QVBoxLayout(self.profiles_page)
@@ -179,7 +193,7 @@ class PreferencesEditor:
         form.addRow(note)
         columns.addWidget(self.profile_form, 1)
         layout.addLayout(columns, 1)
-        tabs.addTab(self.profiles_page, "휠 프로필")
+        profile_tab = add_settings_tab(tabs, self.profiles_page, "휠 프로필")
 
         self.output_page = QWidget()
         layout = QVBoxLayout(self.output_page)
@@ -200,7 +214,7 @@ class PreferencesEditor:
         note.setWordWrap(True)
         layout.addWidget(note)
         layout.addStretch()
-        tabs.addTab(self.output_page, "출력·기록")
+        add_settings_tab(tabs, self.output_page, "출력·기록")
 
         self.preset_list.currentRowChanged.connect(self._select_preset)
         self.profile_list.currentRowChanged.connect(self._select_profile)
@@ -209,7 +223,7 @@ class PreferencesEditor:
         self.profile_name.textChanged.connect(self._profile_label)
         self.profile_mode.currentIndexChanged.connect(self._profile_identity_changed)
         tabs.currentChanged.connect(lambda index: self._select_profile(self._profile_row)
-                                    if tabs.widget(index) is self.profiles_page else None)
+                                    if tabs.widget(index) is profile_tab else None)
         self.set_preferences(preferences)
 
     def _preset_label(self, text):

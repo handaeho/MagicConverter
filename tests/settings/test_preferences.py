@@ -18,7 +18,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PIL import Image
 from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMessageBox
 
 from magic_converter.core.conversion.builtin_converters import create_catalog
 from magic_converter.core.conversion.conversion_request import DropSelection, prepare_request
@@ -163,6 +163,33 @@ class PreferencesTests(unittest.TestCase):
         dialog.reject()
         self.assertEqual(self.store.load(), initial)
         dialog.deleteLater()
+
+    def test_settings_window_can_shrink_and_keep_the_footer_visible(self):
+        dialog = SettingsDialog({})
+        self.addCleanup(dialog.deleteLater)
+        dialog.show()
+        APP.processEvents()
+        self.assertLess(dialog.width(), 780)
+        self.assertLess(dialog.height(), 660)
+        general = dialog.tabs.currentWidget()
+        drag_option_y = dialog.enabled.mapTo(general.viewport(), QPoint()).y()
+
+        dialog.resize(dialog.width(), dialog.height() + 160)
+        APP.processEvents()
+        self.assertEqual(dialog.enabled.mapTo(general.viewport(), QPoint()).y(), drag_option_y)
+
+        dialog.resize(500, 350)
+        dialog.tabs.setCurrentIndex(1)
+        APP.processEvents()
+        self.assertEqual((dialog.width(), dialog.height()), (500, 350))
+        preset_tab = dialog.tabs.currentWidget()
+        self.assertGreater(preset_tab.verticalScrollBar().maximum(), 0)
+        target = dialog.editor.preset_output.collision
+        preset_tab.ensureWidgetVisible(target)
+        APP.processEvents()
+        self.assertTrue(preset_tab.viewport().rect().contains(target.mapTo(preset_tab.viewport(), QPoint())))
+        footer = dialog.findChild(QDialogButtonBox)
+        self.assertTrue(dialog.rect().contains(footer.geometry()))
 
     def test_import_and_restore_are_drafts_until_save(self):
         first = self.store.load()

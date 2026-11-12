@@ -1,4 +1,4 @@
 """magic_converter: an offline Windows file conversion wheel."""
 
-__version__ = "2.2.36"
+__version__ = "2.2.37"
 

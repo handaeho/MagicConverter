@@ -1,11 +1,82 @@
 """Collect and verify the runtime bytes embedded in the Windows installer."""
 
+import ast
+import base64
+import csv
 import hashlib
+import io
 import json
 import shutil
-from pathlib import PurePosixPath
+import tempfile
+from copy import copy
+from pathlib import Path, PurePosixPath
 from urllib.request import urlopen
 from zipfile import ZIP_STORED, ZipFile, ZipInfo
+
+
+PYMUPDF_BUILD = "pymupdf/_build.py"
+PYMUPDF_LOCAL_METADATA = {
+    "pymupdf_git_branch": "",
+    "pymupdf_git_comment": "",
+    "pymupdf_git_diff": "",
+    "pymupdf_git_diff_n": 0,
+    "pymupdf_git_sha": "",
+    "mupdf_location": "",
+}
+
+
+def pymupdf_build_assignments(archive):
+    source = archive.read(PYMUPDF_BUILD).decode("utf-8")
+    assignments = {}
+    for statement in ast.parse(source).body:
+        if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+            target = statement.targets[0]
+            if isinstance(target, ast.Name) and target.id in PYMUPDF_LOCAL_METADATA:
+                if target.id in assignments:
+                    raise ValueError("Duplicate PyMuPDF build metadata assignment")
+                assignments[target.id] = statement
+    if assignments.keys() != PYMUPDF_LOCAL_METADATA.keys():
+        raise ValueError("Unexpected PyMuPDF build metadata layout")
+    return source, assignments
+
+
+def verify_pymupdf_build_metadata(wheel):
+    with ZipFile(wheel) as archive:
+        _, assignments = pymupdf_build_assignments(archive)
+        if any(ast.literal_eval(assignments[key].value) != value for key, value in PYMUPDF_LOCAL_METADATA.items()):
+            raise ValueError("PyMuPDF wheel still contains local build metadata")
+
+
+def clean_pymupdf_wheel(source, destination):
+    """Remove captured build metadata and refresh RECORD while preserving the native binaries."""
+    if destination.exists():
+        raise FileExistsError(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with ZipFile(source) as wheel:
+        names = wheel.namelist()
+        if len(names) != len(set(names)) or any(name.endswith(("/RECORD.jws", "/RECORD.p7s")) for name in names):
+            raise ValueError("Expected an unsigned PyMuPDF wheel with unique members")
+        record_name, = (name for name in names if name.endswith(".dist-info/RECORD"))
+        metadata, assignments = pymupdf_build_assignments(wheel)
+        lines = metadata.splitlines(keepends=True)
+        for key, statement in sorted(assignments.items(), key=lambda item: item[1].lineno, reverse=True):
+            lines[statement.lineno - 1:statement.end_lineno] = [f"{key} = {PYMUPDF_LOCAL_METADATA[key]!r}\n"]
+        cleaned = "".join(lines).encode("utf-8")
+        rows = list(csv.reader(io.StringIO(wheel.read(record_name).decode("utf-8"))))
+        record, = (row for row in rows if row[0] == PYMUPDF_BUILD)
+        digest = base64.urlsafe_b64encode(hashlib.sha256(cleaned).digest()).rstrip(b"=").decode("ascii")
+        record[1:] = ["sha256=" + digest, str(len(cleaned))]
+        output = io.StringIO(newline="")
+        csv.writer(output).writerows(rows)
+        updates = {PYMUPDF_BUILD: cleaned, record_name: output.getvalue().encode("utf-8")}
+        with tempfile.TemporaryDirectory(dir=destination.parent) as temporary:
+            ready = Path(temporary) / destination.name
+            with ZipFile(ready, "w") as clean:
+                for entry in wheel.infolist():
+                    data = updates[entry.filename] if entry.filename in updates else wheel.read(entry)
+                    clean.writestr(copy(entry), data)
+            verify_pymupdf_build_metadata(ready)
+            ready.rename(destination)
 
 
 def checked_file(path, digest):
@@ -73,7 +144,10 @@ def write_runtime_archive(destination, bootstrap, lock, runtime_dir=None):
             if len(matches) != 1:
                 raise ValueError(f"Expected one cached wheel for {requirement}")
             path, = matches
-        inputs["wheels/" + path.name] = (checked_file(path, digest), digest)
+        checked_file(path, digest)
+        if package == "pymupdf":
+            verify_pymupdf_build_metadata(path)
+        inputs["wheels/" + path.name] = (path, digest)
     if runtime_dir is not None and set(cached_wheels) != {path for name, (path, _) in inputs.items() if name.startswith("wheels/")}:
         raise ValueError("The runtime cache contains unpinned wheels")
 
@@ -91,3 +165,13 @@ def write_pinned_archive(destination, inputs, compression=ZIP_STORED):
     with destination.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     return digest, {name: sha256 for name, (_, sha256) in sorted(inputs.items())}
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Remove local build metadata from a PyMuPDF wheel.")
+    parser.add_argument("source", type=Path)
+    parser.add_argument("destination", type=Path)
+    args = parser.parse_args()
+    clean_pymupdf_wheel(args.source, args.destination)

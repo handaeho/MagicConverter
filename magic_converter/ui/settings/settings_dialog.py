@@ -9,7 +9,7 @@ from magic_converter.core.conversion.converter import find_ffmpeg
 from magic_converter import __version__
 from magic_converter.core.settings.preferences import Preferences, default_preferences
 from magic_converter.core.settings.json_store import read_json, write_json
-from magic_converter.ui.settings.preferences_editor import PreferencesEditor
+from magic_converter.ui.settings.preferences_editor import PreferencesEditor, add_settings_tab
 from magic_converter.ui.common.icons import make_icon
 
 
@@ -21,15 +21,19 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("magic_converter · 실행 상태 및 설정")
         self.setWindowIcon(make_icon())
-        self.setMinimumSize(780, 660)
-        self.resize(860, 740)
+        self.setMinimumSize(500, 350)
+        self.resize(640, 540)
         self.settings_store = settings_store
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(8, 8, 8, 8)
+        outer.setSpacing(6)
         self.tabs = QTabWidget()
-        outer.addWidget(self.tabs)
+        outer.addWidget(self.tabs, 1)
         general = QWidget()
         layout = QVBoxLayout(general)
-        self.tabs.addTab(general, "기본")
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+        add_settings_tab(self.tabs, general, "기본")
         self.running_label = QLabel(f"magic_converter {__version__} · 실행 중")
         self.running_label.setStyleSheet("font-size: 17px; font-weight: 600;")
         layout.addWidget(self.running_label)
@@ -38,6 +42,7 @@ class SettingsDialog(QDialog):
         introduction.setWordWrap(True)
         layout.addWidget(introduction)
         form = QFormLayout()
+        form.setVerticalSpacing(4)
         self.enabled = QCheckBox("전역 드래그 감지 사용")
         self.enabled.setChecked(values.get("enabled", True))
         form.addRow(self.enabled)
@@ -83,10 +88,12 @@ class SettingsDialog(QDialog):
         layout.addWidget(help_label)
         formats = QPushButton("지원 형식·제한사항…")
         formats.clicked.connect(self._show_formats)
-        layout.addWidget(formats)
+        layout.addWidget(formats, alignment=Qt.AlignmentFlag.AlignLeft)
+        layout.addStretch()
         self.editor = PreferencesEditor(self.tabs, preferences or default_preferences(**{
             key: value for key, value in values.items() if key in Preferences().base_values()}))
         transfer = QHBoxLayout()
+        transfer.setSpacing(6)
         for label, callback in (("설정 내보내기…", self._export), ("설정 가져오기…", self._import),
                                 ("백업 복구", self._restore), ("기본값 복원", self._reset)):
             button = QPushButton(label)

@@ -1,10 +1,12 @@
-# Windows installer source for 2.2.36
+# Windows installer source for 2.2.37
 
-The [v2.2.36 release](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.36)
+The [v2.2.37 release](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.37)
 provides the corresponding application and native sources, build inputs, notices
 and SHA-256 checksums alongside the Windows ZIP containing both wizards.
-Version 2.2.36 uses the same pinned runtime and native engine binaries as 2.2.35.
-The release includes their existing native corresponding-source archive.
+Version 2.2.37 removes captured local Git metadata and the build-machine path
+from the PyMuPDF wheel and updates its RECORD. The PyMuPDF/MuPDF binaries and
+license files are byte-identical to the previous build. The native source
+archive includes the cleanup script and evidence for the repackaged wheel.
 
 On Windows x64, extract `MagicConverter-corresponding-source.zip` and use Python
 3.14 and the Windows .NET Framework 4.x C# compiler:
@@ -12,11 +14,11 @@ On Windows x64, extract `MagicConverter-corresponding-source.zip` and use Python
 ```powershell
 python .\tools\build\build_public_windows.py --output .\installer-output
 python .\tools\build\build_windows_uninstaller.py --output .\uninstaller-output
-Compress-Archive -LiteralPath .\installer-output\MagicConverter-Setup.exe, .\uninstaller-output\Uninstall.exe -DestinationPath .\MagicConverter-2.2.36-Windows-x64.zip
+Compress-Archive -LiteralPath .\installer-output\MagicConverter-Setup.exe, .\uninstaller-output\Uninstall.exe -DestinationPath .\MagicConverter-2.2.37-Windows-x64.zip
 ```
 
 The first command obtains the pinned `MagicConverter-runtime-inputs.zip` and
-`MagicConverter-native-engines.zip` from the pinned v2.2.32 URLs. Identical inputs are also attached to v2.2.36. For a local rebuild,
+`MagicConverter-native-engines.zip` from the pinned v2.2.37 release URLs. For a local rebuild,
 extract the runtime inputs into a folder and pass it as `--runtime-dir`.
 Place the intact engine ZIP in another folder as
 `<sha256>-MagicConverter-native-engines.zip` and pass that folder as

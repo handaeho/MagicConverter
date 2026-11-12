@@ -10,7 +10,7 @@
 
 ZIP에는 다음 실행 프로그램이 포함됩니다.
 
-- [MagicConverter 2.2.36 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.36/MagicConverter-2.2.36-Windows-x64.zip)
+- [MagicConverter 2.2.37 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.37/MagicConverter-2.2.37-Windows-x64.zip)
 - 설치 마법사 `MagicConverter-Setup.exe`
 - 제거 마법사 `Uninstall.exe`
 
@@ -24,7 +24,7 @@ ZIP에는 다음 실행 프로그램이 포함됩니다.
 2. 설치 폴더를 고르고 확인한 뒤 **설치**를 누릅니다.
 3. 앱이 열리면 탐색기에서 파일을 드래그하고 <kbd>Shift</kbd>를 눌러 변환 형식을 선택합니다. <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
 
-[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.36)
+[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.37)
 
 <p align="center">
   <img src="assets/readme/demo.gif" alt="JPG를 휠로 끌어 PNG로 변환하는 예" width="100%">
