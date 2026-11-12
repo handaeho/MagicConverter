@@ -16,7 +16,7 @@ def _complex_character(character: str) -> bool:
 
 
 def needs_shaping(text: str) -> bool:
-    return any(ord(character) > 127 and _complex_character(character) for character in text)
+    return not text.isascii() and any(ord(character) > 127 and _complex_character(character) for character in text)
 
 
 def write_plain_page(page, header: str, lines: list[str], font, columns: int) -> None:

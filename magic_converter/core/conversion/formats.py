@@ -62,7 +62,7 @@ class FormatRegistry:
 from magic_converter.core.specialized.special_formats import FORMAT_SPECS
 
 FORMATS = FormatRegistry((
-    FileFormat("png", "PNG", "image", ("png",)),
+    FileFormat("png", "PNG", "image", ("png", "apng")),
     FileFormat("jpg", "JPG", "image", ("jpg", "jpeg", "jpe", "jfif")),
     FileFormat("webp", "WebP", "image", ("webp",)),
     FileFormat("bmp", "BMP", "image", ("bmp",)),

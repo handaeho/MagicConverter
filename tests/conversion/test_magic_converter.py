@@ -482,8 +482,8 @@ class FFmpegTests(unittest.TestCase):
         # ensuring multiple progress packets arrive before process exit.
         from magic_converter.core.conversion.converter import media_command
 
-        def streaming_command(*args):
-            command = media_command(*args)
+        def streaming_command(*args, **kwargs):
+            command = media_command(*args, **kwargs)
             command.insert(command.index("-i"), "-re")
             command[-1:-1] = ["-tune", "zerolatency"]
             return command

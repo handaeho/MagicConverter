@@ -10,7 +10,7 @@
 
 ZIP에는 다음 실행 프로그램이 포함됩니다.
 
-- [MagicConverter 2.2.38 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.38/MagicConverter-2.2.38-Windows-x64.zip)
+- [MagicConverter 2.2.39 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.39/MagicConverter-2.2.39-Windows-x64.zip)
 - 설치 마법사 `MagicConverter-Setup.exe`
 - 제거 마법사 `Uninstall.exe`
 
@@ -24,7 +24,7 @@ ZIP에는 다음 실행 프로그램이 포함됩니다.
 2. 설치 폴더를 고르고 확인한 뒤 **설치**를 누릅니다.
 3. 앱이 열리면 탐색기에서 파일을 드래그하고 <kbd>Shift</kbd>를 눌러 변환 형식을 선택합니다. <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
 
-[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.38)
+[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.39)
 
 <p align="center">
   <img src="assets/readme/demo.gif" alt="JPG를 휠로 끌어 PNG로 변환하는 예" width="100%">
@@ -47,8 +47,8 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 
 ## 지원 확장자와 변환 가능 목록
 
-현재 지원하는 **82종·94개 확장자 표기** 전체입니다. <br>
-입력 확장자 93개와 출력 전용 `.html`을 포함합니다. <br>
+현재 지원하는 **82종·95개 확장자 표기** 전체입니다. <br>
+입력 확장자 94개와 출력 전용 `.html`을 포함합니다. <br>
 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
 
 **변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상입니다. <br> 
@@ -60,6 +60,7 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 | 분류 | 입력 확장자 | 변환 휠 출력 | CLI 추가 출력 | 조건·특징 |
 | --- | --- | --- | --- | --- |
 | 이미지 | `.png` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
+| 이미지 | `.apng` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | PNG는 기본 이미지·재생 시간 보존 · WebP는 1ms 단위로 반올림하고 기본 이미지 제외 |
 | 이미지 | `.jpg` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.jpeg` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.jpe` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
@@ -71,7 +72,7 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 | 이미지 | `.heic` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.heif` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.avif` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
-| 이미지 | `.svg` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | SVG를 래스터 이미지 또는 PDF로 렌더링 |
+| 이미지 | `.svg` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 지원하는 SVG는 벡터·텍스트 PDF로 저장 · 래스터 이미지 출력도 지원 |
 | 동영상·GIF | `.mp4` | `.mp4`, `.gif`, `.mp3`, `.webm`, `.mov`, `.mkv`, `.avi`, `.wmv` | `.m4a`, `.wav`, `.flac`, `.ogg`, `.opus`, `.aiff`, `.wma` | FFmpeg 내장 · 오디오 추출에는 음성 트랙 필요 |
 | 동영상·GIF | `.mov` | `.mp4`, `.gif`, `.mp3`, `.webm`, `.mov`, `.mkv`, `.avi`, `.wmv` | `.m4a`, `.wav`, `.flac`, `.ogg`, `.opus`, `.aiff`, `.wma` | FFmpeg 내장 · 오디오 추출에는 음성 트랙 필요 |
 | 동영상·GIF | `.mkv` | `.mp4`, `.gif`, `.mp3`, `.webm`, `.mov`, `.mkv`, `.avi`, `.wmv` | `.m4a`, `.wav`, `.flac`, `.ogg`, `.opus`, `.aiff`, `.wma` | FFmpeg 내장 · 오디오 추출에는 음성 트랙 필요 |

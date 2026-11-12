@@ -6,17 +6,16 @@ from pathlib import Path
 from PIL import Image, ImageOps, ImageSequence
 
 from magic_converter.core.conversion.converter import ConversionError, _load_frames
+from magic_converter.core.media.image_animation import save_apng
 from magic_converter.core.jobs.job_control import checked, check_cancelled
 
 
 def transform_image(source: Path, destination: Path, key: str, options, progress) -> None:
-    poster = False
     if source.suffix.lower() != ".svg":
         with Image.open(source) as image:
             if image.width * image.height * getattr(image, "n_frames", 1) > 128000000:
                 raise ConversionError("이미지 도구의 전체 프레임 픽셀 제한을 초과했습니다. 프레임 추출을 사용하세요.")
-            poster = bool(image.info.get("default_image", False))
-    frames, durations, loop = _load_frames(source, preserve_timing=True)
+    frames, durations, loop, animation = _load_frames(source, preserve_timing=True)
     transformed = []
     try:
         for index, frame in enumerate(checked(frames)):
@@ -37,14 +36,17 @@ def transform_image(source: Path, destination: Path, key: str, options, progress
                 result.putalpha(frame.getchannel("A"))
             transformed.append(result)
             progress(min(90, (index + 1) * 90 // len(frames)))
-        if len(transformed) == 1:
+        if animation is not None:
+            poster, delays = animation
+            save_apng(transformed, destination, poster, delays, loop)
+        elif len(transformed) == 1:
             transformed[0].save(destination, format="PNG", optimize=True, compress_level=9)
         else:
-            animation_count = len(transformed) - int(poster)
+            animation_count = len(transformed)
             # Full-canvas SOURCE frames render independently. Alternating
             # disposal keeps Pillow from merging identical adjacent frames.
             transformed[0].save(destination, format="PNG", save_all=True, append_images=transformed[1:],
-                                default_image=poster, duration=durations[1:] if poster else durations, loop=loop,
+                                duration=durations, loop=loop,
                                 disposal=[index % 2 for index in range(animation_count)], blend=0)
         with Image.open(destination) as decoded:
             if decoded.n_frames != len(transformed) or decoded.size != transformed[0].size:
@@ -77,7 +79,7 @@ def extract_image_frames(source: Path, folder: Path, options, progress) -> None:
                 progress(min(99, (index + 1) * 99 // count))
             (folder / "frames.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         return
-    frames, durations, loop = _load_frames(source)
+    frames, durations, loop, _ = _load_frames(source)
     try:
         indices = list(range(0, len(frames), options.frame_interval))
         if len(indices) > options.max_frames:

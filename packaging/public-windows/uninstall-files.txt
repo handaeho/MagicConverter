@@ -340,6 +340,9 @@ app/magic_converter/core/media/__init__.py
 app/magic_converter/core/media/__pycache__/__init__.cpython-314.opt-1.pyc
 app/magic_converter/core/media/__pycache__/__init__.cpython-314.opt-2.pyc
 app/magic_converter/core/media/__pycache__/__init__.cpython-314.pyc
+app/magic_converter/core/media/__pycache__/image_animation.cpython-314.opt-1.pyc
+app/magic_converter/core/media/__pycache__/image_animation.cpython-314.opt-2.pyc
+app/magic_converter/core/media/__pycache__/image_animation.cpython-314.pyc
 app/magic_converter/core/media/__pycache__/image_tools.cpython-314.opt-1.pyc
 app/magic_converter/core/media/__pycache__/image_tools.cpython-314.opt-2.pyc
 app/magic_converter/core/media/__pycache__/image_tools.cpython-314.pyc
@@ -352,10 +355,15 @@ app/magic_converter/core/media/__pycache__/subtitle_converter.cpython-314.pyc
 app/magic_converter/core/media/__pycache__/subtitle_tools.cpython-314.opt-1.pyc
 app/magic_converter/core/media/__pycache__/subtitle_tools.cpython-314.opt-2.pyc
 app/magic_converter/core/media/__pycache__/subtitle_tools.cpython-314.pyc
+app/magic_converter/core/media/__pycache__/svg_pdf.cpython-314.opt-1.pyc
+app/magic_converter/core/media/__pycache__/svg_pdf.cpython-314.opt-2.pyc
+app/magic_converter/core/media/__pycache__/svg_pdf.cpython-314.pyc
+app/magic_converter/core/media/image_animation.py
 app/magic_converter/core/media/image_tools.py
 app/magic_converter/core/media/media_tools.py
 app/magic_converter/core/media/subtitle_converter.py
 app/magic_converter/core/media/subtitle_tools.py
+app/magic_converter/core/media/svg_pdf.py
 app/magic_converter/core/pdf/__init__.py
 app/magic_converter/core/pdf/__pycache__/__init__.cpython-314.opt-1.pyc
 app/magic_converter/core/pdf/__pycache__/__init__.cpython-314.opt-2.pyc

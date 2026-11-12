@@ -41,7 +41,7 @@ from magic_converter.core.pdf.pdf_pptx_text import (add_positioned_runs, configu
 from magic_converter.core.pdf.pdf_pptx_objects import restore_page
 
 LOGGER = logging.getLogger(__name__)
-IMAGE_FORMATS = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".jpe": "JPEG", ".jfif": "JPEG", ".webp": "WEBP",
+IMAGE_FORMATS = {".png": "PNG", ".apng": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".jpe": "JPEG", ".jfif": "JPEG", ".webp": "WEBP",
                  ".bmp": "BMP", ".tif": "TIFF", ".tiff": "TIFF", ".heic": "HEIF", ".heif": "HEIF", ".avif": "AVIF", ".pdf": "PDF"}
 register_heif_opener(thumbnails=False)
 
@@ -282,7 +282,7 @@ def probe_duration(source: Path, ffmpeg: str, *, streams: list[dict] | None = No
         from magic_converter.core.jobs.process_runner import run_process
         entries = "format=duration:stream=duration"
         if streams is not None:
-            entries += ",codec_type,bits_per_sample,bits_per_raw_sample:stream_disposition=attached_pic"
+            entries += ",codec_type,codec_name,bits_per_sample,bits_per_raw_sample:stream_disposition=attached_pic"
         result = run_process([ffprobe, "-v", "error", "-show_entries", entries, "-of", "json", str(source)], timeout=30)
         if result.returncode:
             return None
@@ -396,9 +396,9 @@ def output_file(source: Path, suffix: str, tag: str = "converted", *,
 
 
 def _load_frames(source: Path, *, preserve_timing: bool = False,
-                 notice: Callable[[str], None] = lambda _: None) -> tuple[list[Image.Image], list[int | float], int]:
+                 notice: Callable[[str], None] = lambda _: None):
     frames: list[Image.Image] = []
-    durations: list[int] = []
+    durations: list[int | float] = []
     if source.suffix.lower() == ".svg":
         from PySide6.QtCore import QBuffer, QIODevice
         from PySide6.QtGui import QImage, QPainter
@@ -418,17 +418,22 @@ def _load_frames(source: Path, *, preserve_timing: bool = False,
         buffer.open(QIODevice.OpenModeFlag.WriteOnly)
         image.save(buffer, "PNG")
         with Image.open(io.BytesIO(bytes(buffer.data()))) as decoded:
-            return [decoded.convert("RGBA")], [100], 0
+            return [decoded.convert("RGBA")], [100], 0, None
     try:
         with Image.open(source) as image:
             loop = int(image.info.get("loop", 0))
+            animation = None
+            if image.format == "PNG" and image.get_format_mimetype() == "image/apng":
+                from magic_converter.core.media.image_animation import read_delays
+                poster = bool(image.info.get("default_image", False))
+                animation = poster, read_delays(source, image.n_frames - int(poster))
             metadata = False
             high_depth = False
             for frame in checked(ImageSequence.Iterator(image)):
                 metadata |= any(key in frame.info for key in ("icc_profile", "exif", "xmp", "dpi"))
                 high_depth |= _high_depth_image(frame)
                 duration = frame.info.get("duration", image.info.get("duration", 100))
-                durations.append(duration if preserve_timing else int(duration or 100))
+                durations.append(duration if preserve_timing or animation else int(duration or 100))
                 normalized = ImageOps.exif_transpose(frame).convert("RGBA")
                 # Copy pixels into an entirely new image: EXIF/XMP/ICC/text and
                 # TIFF tags cannot leak through Pillow's image.info defaults.
@@ -439,7 +444,7 @@ def _load_frames(source: Path, *, preserve_timing: bool = False,
                 notice("이 이미지 출력 경로는 원본의 색상 프로필·해상도·EXIF/XMP 메타데이터를 보존하지 않습니다.")
             if high_depth:
                 notice("이 이미지 출력 경로는 원본의 높은 비트 깊이를 8비트 픽셀로 변환합니다.")
-        return frames, durations, loop
+        return frames, durations, loop, animation
     except Exception:
         for frame in frames:
             frame.close()
@@ -447,8 +452,14 @@ def _load_frames(source: Path, *, preserve_timing: bool = False,
 
 
 def _save_frames(frames: list[Image.Image], destination: Path, suffix: str,
-                 durations: list[int], loop: int, quality: int = 90, *, lossless: bool = False) -> None:
+                 durations: list[int | float], loop: int, quality: int = 90, *, lossless: bool = False,
+                 animation=None) -> None:
     fmt = IMAGE_FORMATS[suffix]
+    if fmt == "PNG" and animation is not None:
+        from magic_converter.core.media.image_animation import save_apng
+        poster, delays = animation
+        save_apng(frames, destination, poster, delays, loop)
+        return
     if len(frames) > 1 and fmt not in {"PNG", "WEBP", "TIFF", "HEIF", "AVIF", "PDF"}:
         raise ConversionError("다중 프레임은 PNG/WebP/TIFF/HEIC/AVIF/PDF로 변환하세요.")
     prepared: list[Image.Image] = []
@@ -513,7 +524,7 @@ def _write_native_png(source: Path, destination: Path, max_edge: int, notice: Ca
             with destination.open("wb") as output:
                 copy_stream(stream, output)
             return True
-        if getattr(image, "n_frames", 1) != 1:
+        if getattr(image, "n_frames", 1) != 1 or (image.format == "PNG" and image.get_format_mimetype() == "image/apng"):
             return False
         if _high_depth_image(image) and image.mode not in {"I;16", "I;16B"}:
             raise ConversionError("이 PNG 변환 경로는 원본의 높은 비트 깊이를 보존할 수 없습니다.")
@@ -538,23 +549,44 @@ def _write_native_png(source: Path, destination: Path, max_edge: int, notice: Ca
 def convert_image(source: Path, destination: Path, suffix: str, *, compress: bool = False,
                   quality: int = 90, max_edge: int = 0, strip_metadata: bool = False,
                   notice: Callable[[str], None] = lambda _: None) -> None:
+    if source.suffix.lower() == ".svg" and suffix == ".pdf":
+        from magic_converter.core.media.svg_pdf import write_svg_pdf
+        write_svg_pdf(source, destination, notice)
+        return
     if (suffix == ".png" and not compress and not strip_metadata and source.suffix.lower() != ".svg"
             and _write_native_png(source, destination, max_edge, notice)):
         return
     gif = source.suffix.lower() == ".gif"
-    frames, durations, loop = _load_frames(source, preserve_timing=gif,
-                                          notice=(lambda _: None) if strip_metadata else notice)
+    frames, durations, loop, animation = _load_frames(source, preserve_timing=gif,
+                                                     notice=(lambda _: None) if strip_metadata else notice)
     if gif:
         # GIF stores repeat count; APNG/WebP store total play count (0=infinite).
         with Image.open(source) as original:
             repeats = original.info.get("loop")
         loop = 1 if repeats is None else (repeats + 1 if repeats else 0)
     try:
+        if animation is not None and suffix == ".webp":
+            from magic_converter.core.media.image_animation import webp_delays
+            poster, delays = animation
+            if poster:
+                frames.pop(0).close()
+                notice("WebP에는 APNG의 별도 기본 이미지를 저장할 수 없어 재생 프레임만 변환합니다.")
+            if len(frames) == 1:
+                notice("WebP의 단일 프레임은 정지 이미지로 저장하며 재생 시간과 반복을 제외합니다.")
+            else:
+                if loop > 65535:
+                    raise ConversionError("WebP의 반복 횟수 한도를 초과했습니다. PNG로 변환하세요.")
+                durations, rounded = webp_delays(delays)
+                if rounded:
+                    notice("WebP의 1ms 단위에 맞춰 APNG 프레임 경계 시간을 반올림합니다.")
+        elif animation is not None and suffix not in {".png", ".apng"}:
+            notice("이 출력 경로는 APNG의 프레임 재생 시간과 반복을 보존하지 않습니다.")
         if max_edge:
             for frame in checked(frames):
                 frame.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
         if not compress:
-            _save_frames(frames, destination, suffix, durations, loop, quality, lossless=gif)
+            _save_frames(frames, destination, suffix, durations, loop, quality,
+                         lossless=gif or animation is not None, animation=animation)
             return
         target_size = source.stat().st_size // 2
         quality_steps = (88, 72, 55, 38, 22) if IMAGE_FORMATS[suffix] in {"JPEG", "WEBP", "HEIF", "AVIF"} else (90,)
@@ -566,7 +598,7 @@ def convert_image(source: Path, destination: Path, suffix: str, *, compress: boo
                                    Image.Resampling.LANCZOS) for frame in checked(frames)]
             try:
                 for quality in checked(quality_steps):
-                    _save_frames(scaled, destination, suffix, durations, loop, quality)
+                    _save_frames(scaled, destination, suffix, durations, loop, quality, animation=animation)
                     if destination.stat().st_size <= target_size:
                         return
             finally:
@@ -581,7 +613,15 @@ def convert_image(source: Path, destination: Path, suffix: str, *, compress: boo
             frame.close()
 
 
-def media_command(ffmpeg: str, source: Path, destination: Path, key: str) -> list[str]:
+def _audio_bit_depth(stream: dict) -> int:
+    for field in ("bits_per_raw_sample", "bits_per_sample"):
+        value = str(stream.get(field, ""))
+        if value.isdecimal() and int(value):
+            return int(value)
+    return 0
+
+
+def media_command(ffmpeg: str, source: Path, destination: Path, key: str, *, audio_stream: dict | None = None) -> list[str]:
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                "-nostats", "-stats_period", "0.2", "-progress", "pipe:1"]
     video_output = key in {"media:mp4", "media:mov", "media:mkv", "media:webm", "media:avi", "media:wmv"}
@@ -611,7 +651,27 @@ def media_command(ffmpeg: str, source: Path, destination: Path, key: str) -> lis
         target = key.split(":")[1]
         codec = {"m4a": "aac", "wav": "pcm_s16le", "flac": "flac", "ogg": "libvorbis",
                  "opus": "libopus", "aiff": "pcm_s16be", "wma": "wmav2"}[target]
+        precision = _audio_bit_depth(audio_stream or {})
+        input_codec = (audio_stream or {}).get("codec_name", "")
+        floating = input_codec.startswith(("pcm_f32", "pcm_f64"))
+        if target in {"wav", "flac"} and precision > 32 and not floating:
+            raise ConversionError("32비트를 넘는 정수 샘플의 정밀도를 이 출력에서 보존할 수 없습니다.")
+        if target == "wav":
+            if floating:
+                codec = "pcm_f64le" if input_codec.startswith("pcm_f64") else "pcm_f32le"
+            elif precision > 24:
+                codec = "pcm_s32le"
+            elif precision > 16:
+                codec = "pcm_s24le"
+            elif precision == 8 and input_codec.startswith(("pcm_", "flac")):
+                codec = "pcm_u8"
+        elif target == "flac" and floating:
+            raise ConversionError("부동소수점 PCM은 FLAC에서 정확히 보존할 수 없습니다. WAV를 선택하세요.")
+        elif target == "flac" and input_codec == "flac":
+            codec = "copy"
         command += ["-map", "0:a:0", "-vn", "-c:a", codec]
+        if target == "flac" and codec != "copy" and precision > 24:
+            command += ["-sample_fmt", "s32", "-bits_per_raw_sample", "32", "-strict", "experimental"]
         if target in {"m4a", "opus", "wma"}:
             command += ["-b:a", "128k"]
         elif target == "ogg":
@@ -671,7 +731,7 @@ def _media_loss_notice(key: str, streams: list[dict], notice: Callable[[str], No
     elif audio_output:
         if len(audio) > 1:
             notice(f"오디오 출력은 첫 음성 트랙만 사용합니다. 나머지 {len(audio) - 1}개 음성 트랙은 제외합니다.")
-        if key in {"audio:wav", "audio:aiff"} and audio:
+        if key == "audio:aiff" and audio:
             if any(str(audio[0].get(field, "")).isdigit() and int(audio[0][field]) > 16
                    for field in ("bits_per_sample", "bits_per_raw_sample")):
                 notice("이 출력은 원본 음성의 비트 깊이를 16비트 PCM으로 줄입니다.")
@@ -699,7 +759,11 @@ def convert_media(source: Path, destination: Path, key: str, ffmpeg: str | None,
         if percent is not None and progress:
             progress(percent)
 
-    command = media_command(ffmpeg, source, destination, key)
+    audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
+    if (key in {"audio:wav", "audio:flac"} and source.suffix.lower() in {".wav", ".flac"}
+            and audio is None):
+        raise ConversionError("WAV·FLAC의 샘플 정밀도를 확인할 수 없습니다. FFprobe와 원본 오디오를 확인하세요.")
+    command = media_command(ffmpeg, source, destination, key, audio_stream=audio)
     if options.video_crf is not None:
         command[command.index("-crf") + 1] = str(options.video_crf)
     if options.audio_bitrate is not None:
@@ -713,6 +777,13 @@ def convert_media(source: Path, destination: Path, key: str, ffmpeg: str | None,
     result = run_process(command, idle_timeout=600, on_output=update)
     if result.returncode:
         raise ConversionError(result.stderr[-2400:].strip() or f"FFmpeg 종료 코드: {result.returncode}")
+    if key == "audio:flac" and audio and audio.get("codec_name") != "flac":
+        depth = _audio_bit_depth(audio)
+        if depth > 16:
+            written: list[dict] = []
+            probe_duration(destination, ffmpeg, streams=written)
+            if not written or _audio_bit_depth(written[0]) < depth:
+                raise ConversionError("FLAC 출력의 비트 깊이가 원본보다 낮거나 확인되지 않습니다.")
     _media_loss_notice(key, streams, notice)
     if progress:
         progress(100)

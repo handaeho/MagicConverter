@@ -6,11 +6,13 @@ import io
 import json
 import os
 import plistlib
+import struct
 import subprocess
 import sys
 import tarfile
 import tempfile
 import unittest
+import wave
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -245,6 +247,82 @@ class ExtendedFormatTests(unittest.TestCase):
             self.assertEqual(converted.mode, "I;16")
             self.assertEqual(converted.tobytes(), gray.tobytes())
 
+    def test_apng_resize_and_webp_preserve_animation_timeline(self):
+        from PIL import ImageSequence
+        from magic_converter.core.conversion.formats import FORMATS
+        from magic_converter.core.media.image_animation import read_delays
+
+        source = self.root / "animation.apng"
+        frames = [Image.new("RGBA", (32, 20), color) for color in ("red", "green", "blue")]
+        frames[0].save(source, format="PNG", save_all=True, append_images=frames[1:],
+                       default_image=True, duration=[16.5, 33.5], loop=3)
+        self.assertEqual(FORMATS.detect(source).id, "png")
+        png = self.root / "resized.png"
+        convert_image(source, png, ".png", max_edge=16)
+        self.assertEqual(read_delays(source, 2), read_delays(png, 2))
+        with Image.open(png) as output:
+            self.assertEqual((output.size, output.info["default_image"], output.info["loop"]), ((16, 10), True, 3))
+            self.assertEqual([frame.getpixel((0, 0)) for frame in ImageSequence.Iterator(output)],
+                             [frame.getpixel((0, 0)) for frame in frames])
+        webp = self.root / "animation.webp"
+        notices = []
+        convert_image(source, webp, ".webp", notice=notices.append)
+        with Image.open(webp) as output:
+            self.assertEqual((output.n_frames, output.info["loop"]), (2, 3))
+            durations = []
+            for index, frame in enumerate(ImageSequence.Iterator(output), 1):
+                self.assertEqual(frame.convert("RGBA").tobytes(), frames[index].tobytes())
+                durations.append(frame.info["duration"])
+            self.assertEqual(durations, [16, 34])
+        self.assertTrue(any("기본 이미지" in warning for warning in notices))
+        self.assertTrue(any("반올림" in warning for warning in notices))
+
+    def test_apng_single_frame_and_long_zero_delays(self):
+        from magic_converter.core.media.image_animation import read_delays, save_apng
+
+        frames = [Image.new("RGBA", (8, 8), color) for color in ("red", "red", "green")]
+        for selected, poster, delays in ((frames[:1], False, [(0, 0)]), (frames, False, [(0, 100), (900, 1), (1, 300)]),
+                                         (frames[:2], True, [(0, 100)])):
+            with self.subTest(poster=poster, delays=delays):
+                source = self.root / "source.png"
+                result = self.root / "result.png"
+                save_apng(selected, source, poster, delays, 7)
+                convert_image(source, result, ".png", max_edge=4)
+                self.assertEqual(read_delays(result, len(delays)), delays)
+                with Image.open(result) as output:
+                    self.assertEqual(output.size, (4, 4))
+                    self.assertEqual(output.get_format_mimetype(), "image/apng")
+                    self.assertEqual((output.n_frames, output.info["loop"]), (len(selected), 7))
+                    self.assertEqual(bool(output.info.get("default_image")), poster)
+
+    def test_svg_pdf_keeps_selectable_text_paths_and_physical_page(self):
+        import pymupdf
+        from magic_converter.core.conversion.builtin_converters import create_catalog
+        from magic_converter.core.conversion.conversion_execution import execute_file
+        from magic_converter.core.conversion.conversion_request import prepare_request
+
+        source = self.root / "vector.svg"
+        source.write_text('''<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="50mm" viewBox="0 0 240 120">
+<defs><linearGradient id="g"><stop stop-color="#237fa1"/><stop offset="1" stop-color="#6a3dca"/></linearGradient></defs>
+<rect width="240" height="120" fill="url(#g)"/>
+<path d="M5 90 C80 10 160 120 220 25" fill="none" stroke="white"/>
+<text x="20" y="50" font-family="Segoe UI" font-size="16">Vector sample</text></svg>''', encoding="utf-8")
+        request = prepare_request([source], "document:pdf", create_catalog())
+        result = execute_file(request, request.files[0], None, lambda _: None, lambda _: None)
+        with pymupdf.open(result) as document:
+            page, = document
+            self.assertAlmostEqual(page.rect.width, 100 * 72 / 25.4, places=3)
+            self.assertAlmostEqual(page.rect.height, 50 * 72 / 25.4, places=3)
+            self.assertIn("Vector sample", page.get_text())
+            self.assertGreaterEqual(len(page.get_drawings()), 1)
+            self.assertEqual(page.get_images(), [])
+        bad = self.root / "unsupported.svg"
+        bad.write_text('<svg width="240" height="120"><foreignObject><p>Keep me</p></foreignObject></svg>', encoding="utf-8")
+        request = prepare_request([bad], "document:pdf", create_catalog())
+        with self.assertRaisesRegex(ConversionError, "foreignObject"):
+            execute_file(request, request.files[0], None, lambda _: None, lambda _: None)
+        self.assertFalse((self.root / "unsupported_converted.pdf").exists())
+
     def test_jpeg_to_png_preserves_icc_and_normalizes_orientation(self):
         source = self.root / "rotated.jpg"
         output = self.root / "rotated.png"
@@ -399,6 +477,46 @@ class ExtendedFormatTests(unittest.TestCase):
 
 @unittest.skipUnless(find_ffmpeg(), "FFmpeg unavailable")
 class ExtendedMediaTests(unittest.TestCase):
+    def test_integer_wav_flac_roundtrip_keeps_samples_and_precision(self):
+        executable = find_ffmpeg()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for width in (2, 3, 4):
+                with self.subTest(bits=width * 8):
+                    source = root / f"source-{width}.wav"
+                    peak = 1 << (8 * width - 1)
+                    data = b"".join(value.to_bytes(width, "little", signed=True)
+                                    for value in (-peak, peak - 1, 1, -1, 3, -3, 0, 0)) * 128
+                    with wave.open(str(source), "wb") as output:
+                        output.setparams((2, width, 48000, 0, "NONE", ""))
+                        output.writeframes(data)
+                    flac = root / f"encoded-{width}.flac"
+                    wav = root / f"decoded-{width}.wav"
+                    convert_media(source, flac, "audio:flac", executable)
+                    convert_media(flac, wav, "audio:wav", executable)
+                    with wave.open(str(wav), "rb") as audio:
+                        self.assertEqual((audio.getnchannels(), audio.getsampwidth(), audio.getframerate()), (2, width, 48000))
+                        self.assertEqual(audio.readframes(audio.getnframes()), data)
+
+    def test_float_wav_refuses_flac_and_keeps_float_in_wav(self):
+        executable = find_ffmpeg()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "float.wav"
+            samples = struct.pack("<4f", 1.1, -1.05, 0.1234567, 0)
+            chunks = (b"WAVEfmt " + struct.pack("<IHHIIHH", 16, 3, 1, 48000, 48000 * 4, 4, 32)
+                      + b"data" + struct.pack("<I", len(samples)) + samples)
+            source.write_bytes(b"RIFF" + struct.pack("<I", len(chunks)) + chunks)
+            flac = root / "float.flac"
+            with self.assertRaisesRegex(ConversionError, "부동소수점"):
+                convert_media(source, flac, "audio:flac", executable)
+            self.assertFalse(flac.exists())
+            wav = root / "retained.wav"
+            convert_media(source, wav, "audio:wav", executable)
+            actual = subprocess.run([executable, "-v", "error", "-i", str(wav), "-c:a", "pcm_f32le", "-f", "f32le", "-"],
+                                    check=True, capture_output=True).stdout
+            self.assertEqual(actual, samples)
+
     def test_all_added_audio_and_video_outputs(self):
         executable = find_ffmpeg()
         with tempfile.TemporaryDirectory() as directory:

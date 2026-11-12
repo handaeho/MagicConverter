@@ -87,7 +87,7 @@ class ProcessRunnerTests(unittest.TestCase):
             token = current.set(Control(event, lambda _: None))
             timer = threading.Timer(0.25, event.set)
 
-            def command(ffmpeg, incoming, outgoing, key):
+            def command(ffmpeg, incoming, outgoing, key, *, audio_stream=None):
                 return [sys.executable, "-c", "import sys,time;from pathlib import Path;Path(sys.argv[1]).write_bytes(b'partial');time.sleep(30)", str(outgoing)]
 
             timer.start()
