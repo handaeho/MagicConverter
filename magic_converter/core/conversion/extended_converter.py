@@ -94,6 +94,8 @@ def convert_extended(source: Path, action: Action, progress: Callable[[int | Non
             write_docx(data, temporary)
             validate_output(temporary)
             audit_output(source, temporary, warning, data)
+        warning("DOCX를 문서 모델로 다시 작성했습니다. 댓글·변경 기록·문서 속성 등은 누락될 수 있습니다. "
+                "동일한 파일이 필요하면 ‘원본 그대로 복사’를 선택하세요.")
         progress(100)
         return destination
     if ext in {".hwp", ".hwpx"} or key in {"document:hwp", "document:hwpx"}:
@@ -128,7 +130,7 @@ def convert_extended(source: Path, action: Action, progress: Callable[[int | Non
         if suffix in {".csv", ".tsv"} and len(sheets) > 1:
             return publish_folder(anchor, lambda folder: write_delimited_sheets(sheets, folder, suffix))
         with output_file(anchor, suffix) as (temporary, destination):
-            write_sheets(sheets, temporary, suffix)
+            write_sheets(sheets, temporary, suffix, notice=warning)
         progress(100)
         return destination
     with output_file(anchor, suffix) as (temporary, destination):
@@ -137,7 +139,7 @@ def convert_extended(source: Path, action: Action, progress: Callable[[int | Non
         elif key.startswith("subtitle:"):
             convert_subtitle(source, temporary, suffix, notice=warning)
         elif key.startswith("archive:"):
-            convert_archive(source, temporary, suffix)
+            convert_archive(source, temporary, suffix, notice=warning)
         elif ext in SLIDE_EXTENSIONS:
             progress(None)
             office_pdf(source, temporary)

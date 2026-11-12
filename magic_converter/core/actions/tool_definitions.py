@@ -31,8 +31,10 @@ _images = FORMATS.ids("image") | {"gif"}
 _videos = FORMATS.ids("video")
 _media = _videos | FORMATS.ids("audio")
 _pdf = frozenset({"pdf"})
+_regular_files = frozenset(item.id for item in FORMATS.known if item.readable and item.id != "rtfd")
 TOOLS = tuple(Tool("tool:" + key, label, description, frozenset(sources), target, engine, fields, folder, combined)
     for key, label, description, sources, target, engine, fields, folder, combined in (
+    ("copy_original", "원본 그대로 복사", "내용을 다시 저장하지 않고 원본 파일을 그대로 복사", _regular_files, None, "copy", (), False, False),
     ("pdf_merge", "PDF 병합", "선택한 PDF·이미지를 입력 순서대로 하나의 PDF로 병합", _pdf | _images, "pdf", "pdf_tools", (), False, True),
     ("pdf_select", "PDF 페이지 추출", "페이지 범위·순서 지정 (예: 3,1-2) · 빈 값은 전체", _pdf, "pdf", "pdf_tools", ("pdf_pages",), False, False),
     ("pdf_split", "PDF 페이지 분할", "선택한 페이지를 한 장씩 PDF로 저장", _pdf, "pdf", "pdf_tools", ("pdf_pages",), True, False),
@@ -43,11 +45,12 @@ TOOLS = tuple(Tool("tool:" + key, label, description, frozenset(sources), target
     ("image_grayscale", "흑백 이미지", "투명도를 유지한 흑백 PNG/APNG 생성", _images, "png", "image_tools", (), False, False),
     ("image_crop", "이미지 자르기", "픽셀 좌표로 모든 프레임 자르기 · 너비/높이 0은 남은 영역", _images, "png", "image_tools", ("crop_x", "crop_y", "crop_width", "crop_height"), False, False),
     ("image_frames", "이미지 프레임 추출", "GIF/APNG/TIFF 등 모든 프레임을 PNG와 시간 정보로 저장", _images, "png", "image_tools", ("frame_interval", "max_frames"), True, False),
+    ("media_remux_mkv", "MKV 트랙 복사", "호환되는 영상·음성·자막·첨부를 재인코딩 없이 MKV에 담기", _videos - {"gif"}, "mkv", "ffmpeg", (), False, False),
     ("media_trim", "미디어 구간 추출", "시작·길이를 지정해 같은 형식으로 재인코딩 · 길이 0은 끝까지", _media, None, "ffmpeg", ("start_ms", "duration_ms"), False, False),
     ("media_mute", "영상 음소거", "음성 트랙을 제거한 H.264 MP4 생성", _videos - {"gif"}, "mp4", "ffmpeg", (), False, False),
     ("media_frames", "영상 프레임 추출", "원본 프레임 간격으로 PNG 추출 · 시작·길이·간격·최대 수 설정", _videos, "png", "ffmpeg", ("start_ms", "duration_ms", "frame_interval", "max_frames"), True, False),
     ("subtitle_shift", "자막 시간 이동", "SRT/VTT 시간 이동 · 음수 시작은 0, 완전히 음수인 구간은 제외", FORMATS.ids("subtitle"), None, "subtitle_tools", ("subtitle_offset_ms",), False, False),
-    ("archive_extract", "압축 해제", "ZIP·TAR·GZIP을 새 폴더에 해제 · 경로·링크·중복·크기 검사", FORMATS.ids("archive") - {"rar"}, None, "archive_tools", (), True, False),
+    ("archive_extract", "압축 해제", "ZIP·TAR 계열·GZIP을 새 폴더에 해제 · 경로·링크·중복·크기 검사", FORMATS.ids("archive") - {"rar"}, None, "archive_tools", (), True, False),
 ))
 TOOL_BY_KEY = {tool.key: tool for tool in TOOLS}
 COMBINED_ACTIONS = frozenset({"zip", "terminal", *(tool.key for tool in TOOLS if tool.combined)})

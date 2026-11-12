@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QApplication, QDialog
 
 from magic_converter.core.conversion.builtin_converters import create_catalog
 from magic_converter.core.conversion.conversion_request import prepare_request, RequestError
-from magic_converter.core.conversion.converter import ConversionWorker, ConversionService, find_ffmpeg, ConversionError
+from magic_converter.core.conversion.converter import ConversionWorker, ConversionService, find_ffmpeg, find_ffprobe, ConversionError
 from magic_converter.core.conversion.file_router import ALL_ACTIONS, slots_for
 from magic_converter.core.jobs.job_control import Control, JobCancelled, current, check_cancelled
 from magic_converter.core.settings.preferences import Preset, ToolOptions, SettingsError, default_preferences, SCHEMA_VERSION
@@ -92,6 +92,69 @@ class ToolTestCase(unittest.TestCase):
         return path
 
 class ToolTests(ToolTestCase):
+    def test_original_copy_preserves_file_bytes_and_compound_suffix(self):
+        source = self.root / "attachment.tar.gz"
+        original = b"fixture byte sequence"
+        source.write_bytes(original)
+        first = self.run_tool(source, "tool:copy_original").outputs[0]
+        second = self.run_tool(source, "tool:copy_original").outputs[0]
+        self.assertEqual(first.name, "attachment_copy.tar.gz")
+        self.assertNotEqual(first, second)
+        self.assertEqual(source.read_bytes(), original)
+        self.assertEqual(first.read_bytes(), original)
+        self.assertEqual(second.read_bytes(), original)
+        empty = self.root / "empty.txt"
+        empty.touch()
+        self.assertEqual(self.run_tool(empty, "tool:copy_original").outputs[0].read_bytes(), b"")
+
+    @unittest.skipUnless(find_ffmpeg() and find_ffprobe(find_ffmpeg()), "FFmpeg and FFprobe required")
+    def test_mkv_track_copy_keeps_packets_languages_chapter_and_attachment(self):
+        ffmpeg = find_ffmpeg()
+        ffprobe = find_ffprobe(ffmpeg)
+        source = self.root / "tracks.mkv"
+        subtitle = self.root / "caption.srt"
+        subtitle.write_text("1\n00:00:00,100 --> 00:00:00,300\nSubtitle\n", encoding="utf-8")
+        chapter = self.root / "chapters.txt"
+        chapter.write_text(";FFMETADATA1\ntitle=Track test\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=400\ntitle=Intro\n",
+                           encoding="utf-8")
+        attachment = self.root / "notes.txt"
+        attachment.write_bytes(b"original attachment")
+        created = run_process([
+            ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", "color=s=48x32:d=0.5",
+            "-f", "lavfi", "-i", "sine=f=400:d=0.5", "-f", "lavfi", "-i", "sine=f=800:d=0.5",
+            "-i", str(subtitle), "-i", str(chapter),
+            "-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:s",
+            "-map_chapters", "4", "-map_metadata", "4", "-c:v", "libx264", "-c:a", "aac", "-c:s", "srt",
+            "-metadata:s:a:0", "language=kor", "-metadata:s:a:1", "language=eng",
+            "-attach", str(attachment), "-metadata:s:t:0", "mimetype=text/plain", str(source),
+        ], timeout=30)
+        self.assertEqual(created.returncode, 0, created.stderr)
+        original = source.read_bytes()
+        copied = self.run_tool(source, "tool:media_remux_mkv").outputs[0]
+
+        def packets(path):
+            probed = run_process([ffprobe, "-v", "error", "-show_packets", "-show_data_hash", "sha256",
+                                  "-of", "json", str(path)], timeout=30)
+            self.assertEqual(probed.returncode, 0, probed.stderr)
+            return [(p["stream_index"], p.get("pts_time"), p.get("dts_time"), p["data_hash"])
+                    for p in json.loads(probed.stdout)["packets"]]
+
+        self.assertEqual(packets(copied), packets(source))
+        info = probe_media(copied, ffmpeg, chapters=True)
+        self.assertEqual([item["codec_type"] for item in info["streams"]],
+                         ["video", "audio", "audio", "subtitle", "attachment"])
+        self.assertEqual([item["tags"]["language"] for item in info["streams"][1:3]], ["kor", "eng"])
+        self.assertEqual(info["chapters"][0]["tags"]["title"], "Intro")
+        self.assertEqual(info["format"]["tags"]["title"], "Track test")
+        extracted = self.root / "extracted.txt"
+        extracted_result = run_process([ffmpeg, "-v", "error", "-dump_attachment:t:0", str(extracted),
+                                        "-i", str(copied), "-t", "0", "-f", "null", "-"], timeout=30)
+        self.assertEqual(extracted_result.returncode, 0, extracted_result.stderr)
+        self.assertEqual(extracted.read_bytes(), attachment.read_bytes())
+        self.assertEqual(source.read_bytes(), original)
+        reencoded = self.run_tool(source, "media:mkv")
+        self.assertTrue(any("추가 트랙" in warning for warning in reencoded.warnings), reencoded.warnings)
+
     def test_tools_are_direct_named_operations_and_default_control_wheel_keeps_shift_layout(self):
         for tool in TOOLS:
             source = next(iter(sorted(tool.sources)))

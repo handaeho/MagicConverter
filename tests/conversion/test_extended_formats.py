@@ -8,6 +8,7 @@ import os
 import plistlib
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -16,7 +17,7 @@ from xml.etree import ElementTree as ET
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PIL import Image
+from PIL import Image, ImageCms
 from docx import Document
 from openpyxl import Workbook, load_workbook
 from pptx import Presentation
@@ -228,6 +229,99 @@ class ExtendedFormatTests(unittest.TestCase):
         self.assertEqual(len(read_sheets(xlsx)), 2)
         self.assertTrue(self.convert(source, "document:pdf").stat().st_size)
 
+    def test_png_preserves_original_bytes_and_native_gray_depth(self):
+        source = self.root / "gray.png"
+        gray = Image.new("I;16", (5, 1))
+        gray.putdata([0, 256, 1024, 32768, 65535])
+        gray.save(source, dpi=(144, 144))
+        original = source.read_bytes()
+        output = self.root / "copy.png"
+        convert_image(source, output, ".png")
+        self.assertEqual(output.read_bytes(), original)
+        tiff = self.root / "gray.tiff"
+        gray.save(tiff)
+        convert_image(tiff, output, ".png")
+        with Image.open(output) as converted:
+            self.assertEqual(converted.mode, "I;16")
+            self.assertEqual(converted.tobytes(), gray.tobytes())
+
+    def test_jpeg_to_png_preserves_icc_and_normalizes_orientation(self):
+        source = self.root / "rotated.jpg"
+        output = self.root / "rotated.png"
+        profile = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+        exif = Image.Exif()
+        exif[274] = 6
+        exif[271] = "Test camera"
+        Image.new("RGB", (16, 10), "green").save(source, icc_profile=profile, exif=exif, dpi=(120, 180))
+        convert_image(source, output, ".png")
+        with Image.open(output) as picture:
+            self.assertEqual(picture.size, (10, 16))
+            self.assertEqual(picture.info["icc_profile"], profile)
+            self.assertAlmostEqual(picture.info["dpi"][0], 180, places=1)
+            self.assertAlmostEqual(picture.info["dpi"][1], 120, places=1)
+            self.assertNotIn(274, picture.getexif())
+            self.assertEqual(picture.getexif()[271], "Test camera")
+
+    def test_jpeg_aliases_use_the_existing_png_route(self):
+        from magic_converter.core.conversion.builtin_converters import create_catalog
+        from magic_converter.core.conversion.conversion_execution import execute_file
+        from magic_converter.core.conversion.conversion_request import prepare_request
+
+        for suffix in (".jpe", ".jfif"):
+            with self.subTest(suffix=suffix):
+                source = self.root / ("image" + suffix)
+                Image.new("RGB", (12, 10), "red").save(source, format="JPEG")
+                request = prepare_request([source], "image:png", create_catalog())
+                result = execute_file(request, request.files[0], None, lambda _: None, lambda _: None)
+                with Image.open(result) as picture:
+                    self.assertEqual((picture.format, picture.size), ("PNG", (12, 10)))
+
+    def test_delimited_strings_remain_literal_in_xlsx_and_ods(self):
+        source = self.root / "literal.csv"
+        source.write_text("=1+1,#N/A,0017\n", encoding="utf-8")
+        for path in (source, self.convert(source, "sheet:ods")):
+            with self.subTest(path=path):
+                output = self.convert(path, "sheet:xlsx")
+                book = load_workbook(output)
+                try:
+                    row = book.active[1]
+                    self.assertEqual([(cell.value, cell.data_type) for cell in row],
+                                     [("=1+1", "s"), ("#N/A", "s"), ("0017", "s")])
+                finally:
+                    book.close()
+
+    def test_ods_repeated_blanks_and_local_formula_survive_xlsx(self):
+        source = self.root / "coordinates.ods"
+        xml = """<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+ xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+ xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+ xmlns:calc="urn:oasis:names:tc:opendocument:xmlns:of:1.2">
+ <office:body><office:spreadsheet><table:table table:name="Data">
+ <table:table-row><table:table-cell office:value-type="float" office:value="3"/></table:table-row>
+ <table:table-row-group>
+ <table:table-row table:number-rows-repeated="3"><table:table-cell/></table:table-row>
+ <table:table-row>
+ <table:table-cell table:number-columns-repeated="2"/>
+ <table:table-cell office:value-type="float" office:value="6" table:formula="calc:=[.$A$1]*2"/>
+ <table:table-cell office:value-type="float" office:value="3" table:formula="calc:=SUM([.A1])"/>
+ </table:table-row></table:table-row-group>
+ <table:table-row table:number-rows-repeated="1048576"><table:table-cell/></table:table-row>
+ </table:table></office:spreadsheet></office:body></office:document-content>"""
+        with zipfile.ZipFile(source, "w") as package:
+            package.writestr("content.xml", xml)
+        warnings = []
+        output = convert_extended(source, ALL_ACTIONS["sheet:xlsx"], lambda _: None, warnings.append)
+        book = load_workbook(output)
+        try:
+            sheet = book.active
+            self.assertEqual((sheet["C5"].value, sheet["C5"].data_type), ("=$A$1*2", "f"))
+            self.assertEqual((sheet["D5"].value, sheet["D5"].data_type), ("calc:=SUM([.A1])", "s"))
+            self.assertIsNone(sheet["A2"].value)
+            self.assertEqual(sheet.max_row, 5)
+        finally:
+            book.close()
+        self.assertTrue(any("Data!D5" in warning for warning in warnings), warnings)
+
     def test_subtitles_and_archives(self):
         source = self.root / "captions.srt"
         source.write_text("1\n00:00:01,000 --> 00:00:03,500\n<b>안녕하세요</b>\nsecond line\n\n2\n00:00:05,000 --> 00:00:07,000\nBye\n", encoding="utf-8")
@@ -250,6 +344,43 @@ class ExtendedFormatTests(unittest.TestCase):
         with self.assertRaises(ConversionError):
             self.convert(malicious, "archive:tar")
         self.assertFalse((self.root / "unsafe_converted.tar").exists())
+
+    def test_archive_conversion_preserves_member_metadata_and_payload(self):
+        source = self.root / "metadata.zip"
+        entry = zipfile.ZipInfo("folder/file.txt", (2021, 2, 4, 8, 10, 12))
+        entry.create_system = 3
+        entry.external_attr = 0o100755 << 16
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr(entry, b"payload")
+        tar = self.convert(source, "archive:tar")
+        with tarfile.open(tar) as archive:
+            member = archive.getmember(entry.filename)
+            self.assertEqual(member.mode, 0o755)
+            self.assertEqual(archive.extractfile(member).read(), b"payload")
+        returned = self.convert(tar, "archive:zip")
+        with zipfile.ZipFile(returned) as archive:
+            restored = archive.getinfo(entry.filename)
+            self.assertEqual(restored.date_time, entry.date_time)
+            self.assertEqual(restored.external_attr >> 16, 0o100755)
+
+    def test_additional_tar_inputs_keep_files_and_use_the_archive_wheel(self):
+        for compression in ("xz", "bz2", "zst"):
+            with self.subTest(compression=compression):
+                source = self.root / ("example.tar." + compression)
+                payload = b"original archive contents"
+                entry = tarfile.TarInfo("folder/원본.txt")
+                entry.mode = 0o640
+                entry.mtime = 1700000000
+                entry.size = len(payload)
+                with tarfile.open(source, "w:" + compression) as archive:
+                    archive.addfile(entry, io.BytesIO(payload))
+                before = source.read_bytes()
+                self.assertEqual({slot.action.key for slot in slots_for([source], "convert") if slot.enabled},
+                                 {"archive:zip", "archive:tar", "archive:gzip"})
+                with zipfile.ZipFile(self.convert(source, "archive:zip")) as archive:
+                    self.assertEqual(archive.read(entry.name), payload)
+                    self.assertEqual(archive.getinfo(entry.name).external_attr >> 16 & 0o777, entry.mode)
+                self.assertEqual(source.read_bytes(), before)
 
     @unittest.skipUnless(os.environ.get("MAGIC_CONVERTER_TEST_OFFICE") == "1" and presentation_available(), "Set MAGIC_CONVERTER_TEST_OFFICE=1 for actual Office export")
     def test_real_powerpoint_pdf_and_all_slide_images(self):

@@ -13,7 +13,7 @@ from typing import Iterable, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     from magic_converter.core.settings.preferences import Preset
 
-from magic_converter.core.conversion.formats import (ARCHIVE_EXTENSIONS, AUDIO_EXTENSIONS, DOCUMENT_EXTENSIONS,
+from magic_converter.core.conversion.formats import (FORMATS, AUDIO_EXTENSIONS, DOCUMENT_EXTENSIONS,
                       HWP_EXTENSIONS, IMAGE_EXTENSIONS, MEDIA_EXTENSIONS,
                       SHEET_EXTENSIONS, SLIDE_EXTENSIONS, VIDEO_EXTENSIONS)
 from magic_converter.core.actions.tool_definitions import TOOLS
@@ -168,7 +168,7 @@ def slots_for(paths: Iterable[str | Path], mode: Mode, ffmpeg_available: bool = 
             actions += (ALL_ACTIONS["office:xlsx_print_pdf"],)
     elif all(p.suffix.lower() in {".srt", ".vtt"} for p in files):
         actions = tuple(ALL_ACTIONS[f"subtitle:{ext}"] for ext in ("srt", "vtt", "txt"))
-    elif all(p.suffix.lower() in ARCHIVE_EXTENSIONS for p in files):
+    elif all((file_format := FORMATS.detect(p)) is not None and file_format.category == "archive" for p in files):
         actions = tuple(ALL_ACTIONS[f"archive:{ext}"] for ext in ("zip", "tar", "gzip"))
     else:
         # Keep the established single-family layouts. For a mixed selection,
@@ -183,7 +183,6 @@ def slots_for(paths: Iterable[str | Path], mode: Mode, ffmpeg_available: bool = 
             actions = (ALL_ACTIONS["strip"],)
 
     from magic_converter.core.engines.office_formats import OFFICE
-    from magic_converter.core.conversion.formats import FORMATS
     from magic_converter.core.specialized.special_formats import visible_keys
     if mode == "convert" and files:
         detected = [FORMATS.detect(p) for p in files]

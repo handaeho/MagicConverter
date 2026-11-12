@@ -52,6 +52,7 @@ def stream_workbook_pdf(source: Path, destination: Path) -> dict:
     import pymupdf as fitz
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
+    from magic_converter.core.documents.spreadsheet_formula import describe_special_formula
     from magic_converter.core.documents.workbook_text import needs_shaping, write_shaped_page, write_plain_page
     from magic_converter.core.documents.workbook_layout import column_count
 
@@ -181,14 +182,24 @@ def stream_workbook_pdf(source: Path, destination: Path) -> dict:
             # rows/columns in a malformed or producer-generated worksheet.
             sheet.reset_dimensions()
             rows = [];batch_cells=0
-            for number, values in enumerate(sheet.iter_rows(values_only=True), 1):
+            for number, cells in enumerate(sheet.iter_rows(), 1):
                 check_cancelled()
-                if not any(value is not None for value in values):
+                values = []
+                populated = formulas = 0
+                for cell in cells:
+                    value = cell.value
+                    if value is not None:
+                        populated += 1
+                        if cell.data_type == "f":
+                            formulas += 1
+                            if not isinstance(value, str):
+                                value = describe_special_formula(value)
+                    values.append(value)
+                if not populated:
                     continue
-                populated = [value for value in values if value is not None]
                 result['rows'] += 1
-                result['cells'] += len(populated)
-                result['formulas'] += sum(isinstance(value, str) and value.startswith('=') for value in populated)
+                result['cells'] += populated
+                result['formulas'] += formulas
                 rows.append((number, values))
                 batch_cells+=len(values)
                 if len(rows) >= ROWS_PER_BATCH or batch_cells>=4096:

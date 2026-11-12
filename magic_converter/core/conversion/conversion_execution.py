@@ -12,6 +12,21 @@ from magic_converter.core.jobs.job_control import check_cancelled, report_stage,
 from magic_converter.core.settings.preferences import EncoderOptions, OutputRule
 
 
+def _copy_original(source, anchor, rule=None, preset_name=""):
+    from magic_converter.core.conversion.converter import output_file
+
+    file_format = FORMATS.detect(source)
+    extension = next(ext for ext in file_format.extensions if source.name.lower().endswith("." + ext))
+    suffix = source.name[-len(extension) - 1:]
+    if suffix.count(".") > 1:
+        # OutputRule normally removes only the final suffix from the stem.
+        anchor = anchor.with_name(anchor.name[:-len(suffix)] + ".archive")
+    with output_file(anchor, suffix, tag="copy", rule=rule, preset_name=preset_name,
+                     allow_empty=True) as (temporary, destination):
+        copy_file(source, temporary)
+    return destination
+
+
 def run_legacy_action(step: ConversionStep, progress: Progress, notice: Notice) -> Path:
     from magic_converter.core.jobs.library_worker import needs_isolation, execute_isolated
     if needs_isolation(step):
@@ -28,6 +43,10 @@ def run_local_action(step: ConversionStep, progress: Progress, notice: Notice) -
     from magic_converter.core.specialized.special_conversion import ENGINES, execute
     if step.edge.engine_id in ENGINES:
         return execute(step, progress, notice)
+    if key == "tool:copy_original":
+        result = _copy_original(source, anchor)
+        progress(100)
+        return result
     if key.startswith("tool:"):
         from magic_converter.core.actions.tool_execution import execute_tool
         return execute_tool(step, progress, notice)
@@ -50,9 +69,10 @@ def run_local_action(step: ConversionStep, progress: Progress, notice: Notice) -
     with encoders.output_file(anchor, suffix) as (temporary, destination):
         if step.edge.engine_id == "images" or source.suffix.lower() in IMAGE_EXTENSIONS:
             encoders.convert_image(source, temporary, suffix, compress=key == "compress",
-                                   quality=step.options.image_quality, max_edge=step.options.image_max_edge)
+                                   quality=step.options.image_quality, max_edge=step.options.image_max_edge,
+                                   strip_metadata=key == "strip", notice=notice)
         else:
-            encoders.convert_media(source, temporary, key, step.ffmpeg, progress, options=step.options)
+            encoders.convert_media(source, temporary, key, step.ffmpeg, progress, options=step.options, notice=notice)
         check_cancelled()
     return destination
 
@@ -89,6 +109,10 @@ def _execute_file(request: ConversionRequest, planned: PlannedFile, ffmpeg: str 
     if not steps:
         raise ConversionError("이 작업은 파일별 변환 경로가 아닙니다.")
     check_cancelled()
+    if len(steps) == 1 and steps[0].action_key == "tool:copy_original" and steps[0].engine_id == "copy":
+        result = _copy_original(planned.source, planned.source, request.output, request.preset_name)
+        progress(100)
+        return result
     if (len(steps) == 1 and request.output == OutputRule() and request.options == EncoderOptions()
             and not request.preset_id):
         edge = steps[0]

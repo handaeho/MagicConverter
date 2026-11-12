@@ -41,7 +41,7 @@ from magic_converter.core.pdf.pdf_pptx_text import (add_positioned_runs, configu
 from magic_converter.core.pdf.pdf_pptx_objects import restore_page
 
 LOGGER = logging.getLogger(__name__)
-IMAGE_FORMATS = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP",
+IMAGE_FORMATS = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".jpe": "JPEG", ".jfif": "JPEG", ".webp": "WEBP",
                  ".bmp": "BMP", ".tif": "TIFF", ".tiff": "TIFF", ".heic": "HEIF", ".heif": "HEIF", ".avif": "AVIF", ".pdf": "PDF"}
 register_heif_opener(thumbnails=False)
 
@@ -273,20 +273,22 @@ def find_ffprobe(ffmpeg: str) -> str | None:
     return str(bundled) if bundled else shutil.which("ffprobe")
 
 
-def probe_duration(source: Path, ffmpeg: str) -> float | None:
+def probe_duration(source: Path, ffmpeg: str, *, streams: list[dict] | None = None) -> float | None:
     """Probe on the worker thread. Unknown/live durations stay indeterminate."""
     ffprobe = find_ffprobe(ffmpeg)
     if not ffprobe:
         return None
     try:
         from magic_converter.core.jobs.process_runner import run_process
-        result = run_process(
-            [ffprobe, "-v", "error", "-show_entries", "format=duration:stream=duration", "-of", "json", str(source)],
-            timeout=30,
-        )
+        entries = "format=duration:stream=duration"
+        if streams is not None:
+            entries += ",codec_type,bits_per_sample,bits_per_raw_sample:stream_disposition=attached_pic"
+        result = run_process([ffprobe, "-v", "error", "-show_entries", entries, "-of", "json", str(source)], timeout=30)
         if result.returncode:
             return None
         data = json.loads(result.stdout)
+        if streams is not None:
+            streams.extend(data.get("streams", ()))
         durations = [data.get("format", {}).get("duration")]
         durations += [stream.get("duration") for stream in data.get("streams", [])]
         valid: list[float] = []
@@ -338,7 +340,8 @@ class FFmpegProgressParser:
 
 @contextmanager
 def output_file(source: Path, suffix: str, tag: str = "converted", *,
-                rule: OutputRule | None = None, preset_name: str = "") -> Iterator[tuple[Path, Path]]:
+                rule: OutputRule | None = None, preset_name: str = "",
+                allow_empty: bool = False) -> Iterator[tuple[Path, Path]]:
     """Reserve the destination atomically, encode to a sibling temporary file.
 
     Exclusive creation also handles concurrent drops targeting the same name.
@@ -366,7 +369,7 @@ def output_file(source: Path, suffix: str, tag: str = "converted", *,
         temporary = Path(name)
         yield temporary, destination
         check_cancelled()
-        if temporary.stat().st_size == 0:
+        if not allow_empty and temporary.stat().st_size == 0:
             raise ConversionError("변환 결과가 비어 있습니다.")
         publication_deadline = time.monotonic() + 1.0
         while True:
@@ -392,7 +395,8 @@ def output_file(source: Path, suffix: str, tag: str = "converted", *,
             temporary.unlink(missing_ok=True)
 
 
-def _load_frames(source: Path, *, preserve_timing: bool = False) -> tuple[list[Image.Image], list[int | float], int]:
+def _load_frames(source: Path, *, preserve_timing: bool = False,
+                 notice: Callable[[str], None] = lambda _: None) -> tuple[list[Image.Image], list[int | float], int]:
     frames: list[Image.Image] = []
     durations: list[int] = []
     if source.suffix.lower() == ".svg":
@@ -418,7 +422,11 @@ def _load_frames(source: Path, *, preserve_timing: bool = False) -> tuple[list[I
     try:
         with Image.open(source) as image:
             loop = int(image.info.get("loop", 0))
+            metadata = False
+            high_depth = False
             for frame in checked(ImageSequence.Iterator(image)):
+                metadata |= any(key in frame.info for key in ("icc_profile", "exif", "xmp", "dpi"))
+                high_depth |= _high_depth_image(frame)
                 duration = frame.info.get("duration", image.info.get("duration", 100))
                 durations.append(duration if preserve_timing else int(duration or 100))
                 normalized = ImageOps.exif_transpose(frame).convert("RGBA")
@@ -427,6 +435,10 @@ def _load_frames(source: Path, *, preserve_timing: bool = False) -> tuple[list[I
                 clean = Image.new("RGBA", normalized.size)
                 clean.paste(normalized)
                 frames.append(clean)
+            if metadata:
+                notice("이 이미지 출력 경로는 원본의 색상 프로필·해상도·EXIF/XMP 메타데이터를 보존하지 않습니다.")
+            if high_depth:
+                notice("이 이미지 출력 경로는 원본의 높은 비트 깊이를 8비트 픽셀로 변환합니다.")
         return frames, durations, loop
     except Exception:
         for frame in frames:
@@ -479,11 +491,59 @@ def _save_frames(frames: list[Image.Image], destination: Path, suffix: str,
 from magic_converter.core.jobs.raw_api import bounded_raw
 
 
+PNG_NATIVE_MODES = frozenset({"1", "L", "LA", "P", "RGB", "RGBA", "I;16", "I;16B"})
+
+
+def _high_depth_image(image: Image.Image) -> bool:
+    if image.mode in {"I", "F"} or image.mode.startswith("I;16"):
+        return True
+    raw_mode = getattr(getattr(image, "png", None), "im_rawmode", "") or ""
+    bits = getattr(image, "tag_v2", {}).get(258, ())
+    if isinstance(bits, int):
+        bits = (bits,)
+    return (";16" in raw_mode or max(bits, default=0) > 8
+            or int(image.info.get("bit_depth") or 8) > 8)
+
+
+def _write_native_png(source: Path, destination: Path, max_edge: int, notice: Callable[[str], None]) -> bool:
+    with source.open("rb") as stream, Image.open(stream) as image:
+        if image.format == "PNG" and (not max_edge or max(image.size) <= max_edge):
+            image.verify()
+            stream.seek(0)
+            with destination.open("wb") as output:
+                copy_stream(stream, output)
+            return True
+        if getattr(image, "n_frames", 1) != 1:
+            return False
+        if _high_depth_image(image) and image.mode not in {"I;16", "I;16B"}:
+            raise ConversionError("이 PNG 변환 경로는 원본의 높은 비트 깊이를 보존할 수 없습니다.")
+        if image.mode not in PNG_NATIVE_MODES:
+            return False
+        orientation = image.getexif().get(274)
+        ImageOps.exif_transpose(image, in_place=True)
+        options = {key: image.info[key] for key in ("icc_profile", "dpi", "exif", "transparency")
+                   if image.info.get(key) is not None}
+        if orientation in {5, 6, 7, 8} and "dpi" in options:
+            options["dpi"] = options["dpi"][::-1]
+        if max_edge:
+            image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        if image.info.get("xmp") or image.info.get("XML:com.adobe.xmp"):
+            notice("이 PNG 인코딩 경로는 원본 XMP 메타데이터를 보존하지 않습니다.")
+        check_cancelled()
+        image.save(destination, format="PNG", optimize=True, compress_level=9, **options)
+        return True
+
+
 @bounded_raw
 def convert_image(source: Path, destination: Path, suffix: str, *, compress: bool = False,
-                  quality: int = 90, max_edge: int = 0) -> None:
+                  quality: int = 90, max_edge: int = 0, strip_metadata: bool = False,
+                  notice: Callable[[str], None] = lambda _: None) -> None:
+    if (suffix == ".png" and not compress and not strip_metadata and source.suffix.lower() != ".svg"
+            and _write_native_png(source, destination, max_edge, notice)):
+        return
     gif = source.suffix.lower() == ".gif"
-    frames, durations, loop = _load_frames(source, preserve_timing=gif)
+    frames, durations, loop = _load_frames(source, preserve_timing=gif,
+                                          notice=(lambda _: None) if strip_metadata else notice)
     if gif:
         # GIF stores repeat count; APNG/WebP store total play count (0=infinite).
         with Image.open(source) as original:
@@ -497,7 +557,7 @@ def convert_image(source: Path, destination: Path, suffix: str, *, compress: boo
             _save_frames(frames, destination, suffix, durations, loop, quality, lossless=gif)
             return
         target_size = source.stat().st_size // 2
-        quality_steps = (88, 72, 55, 38, 22) if suffix in {".jpg", ".jpeg", ".webp", ".heic", ".heif", ".avif"} else (90,)
+        quality_steps = (88, 72, 55, 38, 22) if IMAGE_FORMATS[suffix] in {"JPEG", "WEBP", "HEIF", "AVIF"} else (90,)
         width, height = frames[0].size
         while True:
             check_cancelled()
@@ -599,14 +659,36 @@ def publish_folder(source: Path, producer: Callable[[Path], None], *,
                 index += 1
 
 
+def _media_loss_notice(key: str, streams: list[dict], notice: Callable[[str], None]) -> None:
+    if key == "strip":
+        return
+    audio = [stream for stream in streams if stream.get("codec_type") == "audio"]
+    video = [stream for stream in streams if stream.get("codec_type") == "video"
+             and not stream.get("disposition", {}).get("attached_pic")]
+    audio_output = key == "media:mp3" or key.startswith("audio:")
+    if key == "media:gif":
+        notice("GIF에는 영상 한 트랙을 최대 폭 960·15fps·팔레트 색상으로 저장하며 음성·자막을 제외합니다.")
+    elif audio_output:
+        if len(audio) > 1:
+            notice(f"오디오 출력은 첫 음성 트랙만 사용합니다. 나머지 {len(audio) - 1}개 음성 트랙은 제외합니다.")
+        if key in {"audio:wav", "audio:aiff"} and audio:
+            if any(str(audio[0].get(field, "")).isdigit() and int(audio[0][field]) > 16
+                   for field in ("bits_per_sample", "bits_per_raw_sample")):
+                notice("이 출력은 원본 음성의 비트 깊이를 16비트 PCM으로 줄입니다.")
+    elif len(audio) > 1 or len(video) > 1 or len(audio) + len(video) != len(streams):
+        notice("영상 재인코딩은 영상·음성의 첫 트랙만 사용하며 추가 트랙·자막·첨부를 제외합니다.")
+
+
 def convert_media(source: Path, destination: Path, key: str, ffmpeg: str | None,
                   progress: Callable[[int | None], None] | None = None, *,
-                  options: EncoderOptions = EncoderOptions()) -> None:
+                  options: EncoderOptions = EncoderOptions(),
+                  notice: Callable[[str], None] = lambda _: None) -> None:
     if not ffmpeg:
         raise ConversionError("FFmpeg를 찾지 못했습니다. PATH 또는 설정의 경로를 확인하세요.")
     if progress:
         progress(None)
-    duration = probe_duration(source, ffmpeg)
+    streams: list[dict] = []
+    duration = probe_duration(source, ffmpeg, streams=streams)
     parser = FFmpegProgressParser(duration)
     if progress and duration:
         progress(0)
@@ -631,6 +713,7 @@ def convert_media(source: Path, destination: Path, key: str, ffmpeg: str | None,
     result = run_process(command, idle_timeout=600, on_output=update)
     if result.returncode:
         raise ConversionError(result.stderr[-2400:].strip() or f"FFmpeg 종료 코드: {result.returncode}")
+    _media_loss_notice(key, streams, notice)
     if progress:
         progress(100)
 

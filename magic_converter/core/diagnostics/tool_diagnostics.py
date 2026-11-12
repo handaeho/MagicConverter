@@ -40,6 +40,10 @@ def check_tools(app, root: Path, image: Path, video: Path, ffmpeg: str) -> dict:
         checks.append(key)
         return results[0].outputs[0]
 
+    copied = run(image, "tool:copy_original")
+    if copied == image or copied.read_bytes() != image.read_bytes():
+        raise RuntimeError("Original copy changed the file")
+
     pdf = directory / "pages.pdf"
     doc = fitz.open()
     for index in range(2):
@@ -88,6 +92,14 @@ def check_tools(app, root: Path, image: Path, video: Path, ffmpeg: str) -> dict:
     if [frame["duration_ms"] for frame in manifest["frames"]] != [100, 200, 300]:
         raise RuntimeError("Image frame timing mismatch")
 
+    remuxed = run(video, "tool:media_remux_mkv")
+    original_streams = probe_media(video, ffmpeg)["streams"]
+    remuxed_streams = probe_media(remuxed, ffmpeg)["streams"]
+    if remuxed.suffix != ".mkv" or [
+        (stream["codec_type"], stream["codec_name"]) for stream in remuxed_streams
+    ] != [(stream["codec_type"], stream["codec_name"]) for stream in original_streams]:
+        raise RuntimeError("MKV track copy changed the stream formats")
+
     trimmed = run(video, "tool:media_trim", ToolOptions(start_ms=200, duration_ms=300))
     duration = float(probe_media(trimmed, ffmpeg)["format"]["duration"])
     if not 0.2 <= duration <= 0.45:
@@ -128,7 +140,7 @@ def check_tools(app, root: Path, image: Path, video: Path, ffmpeg: str) -> dict:
         raise RuntimeError("Contextual tools wheel failed")
     wheel.dismiss()
     wheel.deleteLater()
-    if len(checks) != len(TOOLS):
+    if len(checks) != len(TOOLS) or set(checks) != {tool.key for tool in TOOLS}:
         raise RuntimeError("A registered tool was not exercised")
     return {"actions": len(checks), "pdf_objects_pages_render": "passed", "image_pixels_frames_timing": "passed",
             "media_decode_streams_frames": "passed", "subtitle_timing": "passed", "archive_contents": "passed",

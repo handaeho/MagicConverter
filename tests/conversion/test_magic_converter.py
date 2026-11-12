@@ -74,7 +74,9 @@ class RoutingAndGeometryTests(unittest.TestCase):
         self.assertTrue(next(s for s in audio if s.action.key == "audio:flac").enabled)
         mixed = slots_for(["a.png", "b.mp3"], "action", ffmpeg_available=False)
         self.assertFalse(next(s for s in mixed if s.action.key == "strip").enabled)
-        self.assertEqual({s.action.key for s in mixed if s.enabled}, {"copy_path", "zip", "terminal"})
+        self.assertEqual(
+            {s.action.key for s in mixed if s.enabled}, {"copy_path", "zip", "terminal", "tool:copy_original"}
+        )
         self.assertFalse(any(s.enabled for s in slots_for(["a.unknown"], "convert")))
         self.assertEqual(len(normalize_paths(["a.png", "a.png"])), 1)
 
@@ -144,7 +146,15 @@ class FileAndWorkerTests(unittest.TestCase):
             convert_image(source, destination, suffix)
             with Image.open(destination) as image:
                 self.assertEqual(image.size, (40, 80))
-                self.assertNotIn(0x013B, image.getexif())
+                self.assertNotIn(0x0112, image.getexif())
+                if suffix == ".png":
+                    self.assertEqual(image.getexif()[0x013B], "Private Author")
+                else:
+                    self.assertNotIn(0x013B, image.getexif())
+        stripped = self.root / "stripped.png"
+        convert_image(source, stripped, ".png", strip_metadata=True)
+        with Image.open(stripped) as image:
+            self.assertNotIn(0x013B, image.getexif())
         destination = self.root / "opaque.jpg"
         convert_image(self.source, destination, ".jpg")
         with Image.open(destination) as image:

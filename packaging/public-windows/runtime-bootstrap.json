@@ -12,7 +12,7 @@
   },
   "inputs_bundle": {
     "filename": "MagicConverter-runtime-inputs.zip",
-    "url": "https://github.com/handaeho/MagicConverter/releases/download/v2.2.37/MagicConverter-runtime-inputs.zip",
+    "url": "https://github.com/handaeho/MagicConverter/releases/download/v2.2.38/MagicConverter-runtime-inputs.zip",
     "sha256": "9c8fc90e192ce9d7b635d98438206d7a2d74d361d6243eae1b2ec2eecefd7390"
   }
 }

@@ -35,7 +35,7 @@ def execute_tool(step, progress, notice):
             transform_image(source, temporary, tool.key, options, progress)
         elif tool.key.startswith("tool:media_"):
             from magic_converter.core.media.media_tools import convert_media_tool
-            convert_media_tool(source, temporary, tool.key, options, step.ffmpeg, progress)
+            convert_media_tool(source, temporary, tool.key, options, step.ffmpeg, progress, notice)
         else:
             from magic_converter.core.media.subtitle_converter import convert_subtitle
             convert_subtitle(source, temporary, source.suffix.lower(), offset_ms=options.subtitle_offset_ms, notice=notice)

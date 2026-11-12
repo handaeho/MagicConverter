@@ -25,17 +25,22 @@ def add(digest,sheet,address,value):
 def source_contents(source):
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
+    from magic_converter.core.documents.spreadsheet_formula import describe_special_formula
     digest=hashlib.sha256();sheets=rows=cells=formulas=0
     book=load_workbook(source,read_only=True,data_only=False,keep_links=False)
     try:
         for sheet in book:
             sheets+=1;sheet.reset_dimensions()
-            for row,values in enumerate(sheet.iter_rows(values_only=True),1):
-                if not any(value is not None for value in values):continue
+            for row,values in enumerate(sheet.iter_rows(),1):
+                if not any(cell.value is not None for cell in values):continue
                 rows+=1
-                for column,value in enumerate(values,1):
+                for column,cell in enumerate(values,1):
+                    value=cell.value
                     if value is None:continue
-                    cells+=1;formulas+=isinstance(value,str)and value.startswith('=')
+                    cells+=1
+                    if cell.data_type=='f':
+                        formulas+=1
+                        if not isinstance(value,str):value=describe_special_formula(value)
                     add(digest,sheet.title,f'{get_column_letter(column)}{row}',str(value))
     finally:book.close()
     return {'sheets':sheets,'rows':rows,'cells':cells,'formulas':formulas,'content_sha256':digest.hexdigest()}

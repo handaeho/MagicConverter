@@ -63,7 +63,7 @@ from magic_converter.core.specialized.special_formats import FORMAT_SPECS
 
 FORMATS = FormatRegistry((
     FileFormat("png", "PNG", "image", ("png",)),
-    FileFormat("jpg", "JPG", "image", ("jpg", "jpeg")),
+    FileFormat("jpg", "JPG", "image", ("jpg", "jpeg", "jpe", "jfif")),
     FileFormat("webp", "WebP", "image", ("webp",)),
     FileFormat("bmp", "BMP", "image", ("bmp",)),
     FileFormat("tiff", "TIFF", "image", ("tiff", "tif")),
@@ -95,6 +95,7 @@ FORMATS = FormatRegistry((
     *(FileFormat(ext, ext.upper(), "archive", (ext,)) for ext in ("zip", "tar")),
     FileFormat("gz", "GZIP", "archive", ("gz", "gzip"), writable=False),
     FileFormat("tar.gz", "TAR.GZ", "archive", ("tar.gz", "tgz")),
+    *(FileFormat(ext, ext.upper(), "archive", (ext,), writable=False) for ext in ("tar.xz", "tar.bz2", "tar.zst")),
     FileFormat("rar", "RAR", "archive", ("rar",), writable=False),
     *(FileFormat(*spec) for spec in FORMAT_SPECS),
 ))

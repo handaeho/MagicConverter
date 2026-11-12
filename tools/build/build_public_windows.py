@@ -5,7 +5,7 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import sys
@@ -118,6 +118,18 @@ def build(output, runtime_dir=None, vendor_cache=None):
     license_manifest = json.loads((ROOT / "licenses/stage7/manifest.json").read_text(encoding="utf-8"))
     stage7 = ["licenses/stage7/manifest.json", *("licenses/stage7/" + item["file"] for item in license_manifest)]
     app = files([*APP_DATA, *stage7, *(p.relative_to(ROOT).as_posix() for p in (ROOT / "magic_converter").rglob("*.py"))])
+    bootstrap = json.loads(config["packaging/public-windows/runtime-bootstrap.json"])
+    cache_tag = "cpython-" + "".join(bootstrap["python_version"].split(".")[:2])
+    uninstall_files = set(config["packaging/public-windows/uninstall-files.txt"].decode("utf-8").splitlines())
+    installed_app_files = {"app/" + name for name in app.keys() | ENGINE_FILES}
+    for name in app:
+        if name.startswith("magic_converter/") and name.endswith(".py"):
+            module = PurePosixPath("app", name)
+            for optimization in ("", ".opt-1", ".opt-2"):
+                cache_file = module.parent / "__pycache__" / f"{module.stem}.{cache_tag}{optimization}.pyc"
+                installed_app_files.add(cache_file.as_posix())
+    if missing := installed_app_files - uninstall_files:
+        raise ValueError("Missing installed files in the removal inventory: " + ", ".join(sorted(missing)))
     for item in license_manifest:
         if sha(app["licenses/stage7/" + item["file"]]) != item["sha256"]:
             raise ValueError("Changed stage-7 license: " + item["file"])
@@ -161,7 +173,6 @@ def build(output, runtime_dir=None, vendor_cache=None):
         }
         payload = zip_bytes(setup_files)
         (temp / "setup.zip").write_bytes(payload)
-        bootstrap = json.loads(config["packaging/public-windows/runtime-bootstrap.json"])
         runtime_digest, runtime_files = write_runtime_archive(temp / "runtime.zip", bootstrap, lock, runtime_dir)
         vendor = temp / "engines"
         vendor_manifest = json.loads(config["packaging/public-windows/engines-lock.json"])

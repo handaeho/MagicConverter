@@ -10,7 +10,7 @@
 
 ZIP에는 다음 실행 프로그램이 포함됩니다.
 
-- [MagicConverter 2.2.37 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.37/MagicConverter-2.2.37-Windows-x64.zip)
+- [MagicConverter 2.2.38 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.38/MagicConverter-2.2.38-Windows-x64.zip)
 - 설치 마법사 `MagicConverter-Setup.exe`
 - 제거 마법사 `Uninstall.exe`
 
@@ -24,12 +24,14 @@ ZIP에는 다음 실행 프로그램이 포함됩니다.
 2. 설치 폴더를 고르고 확인한 뒤 **설치**를 누릅니다.
 3. 앱이 열리면 탐색기에서 파일을 드래그하고 <kbd>Shift</kbd>를 눌러 변환 형식을 선택합니다. <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
 
-[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.37)
+[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.38)
 
 <p align="center">
   <img src="assets/readme/demo.gif" alt="JPG를 휠로 끌어 PNG로 변환하는 예" width="100%">
   <br><sub><a href="assets/readme/demo-still.png">정지 화면으로 보기</a></sub>
 </p>
+
+일반 PNG 변환은 지원하는 EXIF 정보를 보존합니다. 공유용 파일에서 작성자나 위치 등 메타데이터를 지우려면 도구 휠에서 **메타데이터 제거**를 선택하세요.
 
 ## CLI로 시작하기
 
@@ -45,8 +47,8 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 
 ## 지원 확장자와 변환 가능 목록
 
-현재 지원하는 **79종·89개 확장자 표기** 전체입니다. <br> 
-입력 확장자 88개와 출력 전용 `.html`을 포함합니다. <br> 
+현재 지원하는 **82종·94개 확장자 표기** 전체입니다. <br>
+입력 확장자 93개와 출력 전용 `.html`을 포함합니다. <br>
 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
 
 **변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상입니다. <br> 
@@ -60,6 +62,8 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 | 이미지 | `.png` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.jpg` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.jpeg` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
+| 이미지 | `.jpe` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
+| 이미지 | `.jfif` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.webp` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.bmp` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
 | 이미지 | `.tiff` | `.png`, `.jpg`, `.webp`, `.bmp`, `.tiff`, `.heic`, `.avif`, `.pdf` | — | 투명도·다중 프레임 보존은 출력 형식에 따라 다름 |
@@ -121,6 +125,9 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 | 압축 | `.gzip` | `.zip`, `.tar`, `.tar.gz` | — | 내용을 풀어 다시 압축 · GZIP 출력은 .tar.gz |
 | 압축 | `.tar.gz` | `.zip`, `.tar`, `.tar.gz` | — | 내용을 풀어 다시 압축 · GZIP 출력은 .tar.gz |
 | 압축 | `.tgz` | `.zip`, `.tar`, `.tar.gz` | — | 내용을 풀어 다시 압축 · GZIP 출력은 .tar.gz |
+| 압축 | `.tar.xz` | `.zip`, `.tar`, `.tar.gz` | — | 압축 TAR 입력 · 일반 파일의 내용·수정 시각·권한을 가능한 범위에서 보존 |
+| 압축 | `.tar.bz2` | `.zip`, `.tar`, `.tar.gz` | — | 압축 TAR 입력 · 일반 파일의 내용·수정 시각·권한을 가능한 범위에서 보존 |
+| 압축 | `.tar.zst` | `.zip`, `.tar`, `.tar.gz` | — | 압축 TAR 입력 · 일반 파일의 내용·수정 시각·권한을 가능한 범위에서 보존 |
 | 압축 | `.rar` | `.zip`, `.tar`, `.tar.gz` | — | 압축 해제 가능한 RAR · 압축 방식에 맞는 해제 도구 필요 |
 | 구조화 데이터 | `.json` | `.jsonl`, `.yaml`, `.toml`, `.xml`, `.csv` (자료), `.tsv` (자료) | — | 자료형·최상위 구조 제약 적용 |
 | 구조화 데이터 | `.jsonl` | `.json`, `.yaml`, `.xml`, `.csv` (자료), `.tsv` (자료) | — | 자료형·최상위 구조 제약 적용 |

@@ -12,11 +12,14 @@ from magic_converter.core.jobs.job_control import check_cancelled, checked
 from magic_converter.core.jobs.process_runner import run_process
 
 
-def probe_media(source: Path, ffmpeg: str) -> dict:
+def probe_media(source: Path, ffmpeg: str, *, chapters: bool = False) -> dict:
     probe = find_ffprobe(ffmpeg)
     if not probe:
         raise ConversionError("미디어 도구에는 FFprobe가 필요합니다.")
-    result = run_process([probe, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(source)], timeout=30)
+    args = [probe, "-v", "error", "-show_streams", "-show_format"]
+    if chapters:
+        args.append("-show_chapters")
+    result = run_process([*args, "-of", "json", str(source)], timeout=30)
     if result.returncode:
         raise ConversionError(result.stderr[-1200:] or "미디어 정보를 읽지 못했습니다.")
     data = json.loads(result.stdout)
@@ -53,9 +56,51 @@ def _run(command, duration, progress):
         raise ConversionError(result.stderr[-2400:].strip() or f"FFmpeg 종료 코드: {result.returncode}")
 
 
-def convert_media_tool(source: Path, destination: Path, key: str, options, ffmpeg, progress):
+def _track_signature(stream):
+    tags = {key.lower(): value for key, value in stream.get("tags", {}).items()}
+    language = tags.get("language")
+    return (stream.get("codec_type"), stream.get("codec_name"),
+            None if language in {None, "und"} else language,
+            tuple(tags.get(key) for key in ("title", "filename", "mimetype")),
+            frozenset(key for key, enabled in stream.get("disposition", {}).items() if enabled))
+
+
+def _check_remux(source, output, notice):
+    if [_track_signature(item) for item in source["streams"]] != [_track_signature(item) for item in output["streams"]]:
+        raise ConversionError("MKV에 모든 트랙의 코덱·이름·언어·기본 설정을 유지할 수 없습니다.")
+    before, after = source.get("chapters", []), output.get("chapters", [])
+    if len(before) != len(after):
+        raise ConversionError("MKV에 모든 챕터를 유지할 수 없습니다.")
+    for left, right in zip(before, after):
+        if (left.get("tags", {}).get("title") != right.get("tags", {}).get("title")
+                or any(abs(float(left[field]) - float(right[field])) > 0.001
+                       for field in ("start_time", "end_time"))):
+            raise ConversionError("MKV에 챕터 이름 또는 시간을 유지할 수 없습니다.")
+    if any(left.get("time_base") != right.get("time_base")
+           for left, right in zip(source["streams"], output["streams"])):
+        notice("트랙을 재인코딩하지 않았습니다. MKV의 시간 단위에 맞춰 일부 재생 시각이 반올림될 수 있습니다.")
+
+
+def _remux_mkv(source, destination, ffmpeg, progress, notice):
+    info = probe_media(source, ffmpeg, chapters=True)
+    command = [
+        ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+        "-nostats", "-stats_period", "0.2", "-progress", "pipe:1",
+        "-copyts", "-i", str(source), "-map", "0", "-map_metadata", "0", "-map_chapters", "0",
+        "-c", "copy", "-default_mode", "passthrough", "-avoid_negative_ts", "disabled", str(destination),
+    ]
+    _run(command, _duration(info), progress)
+    check_cancelled()
+    _check_remux(info, probe_media(destination, ffmpeg, chapters=True), notice)
+    progress(100)
+
+
+def convert_media_tool(source: Path, destination: Path, key: str, options, ffmpeg, progress, notice=lambda _: None):
     if not ffmpeg:
         raise ConversionError("FFmpeg가 필요합니다.")
+    if key == "tool:media_remux_mkv":
+        _remux_mkv(source, destination, ffmpeg, progress, notice)
+        return
     info = probe_media(source, ffmpeg)
     length = _check_range(info, options)
     format_id = FORMATS.detect(source).id

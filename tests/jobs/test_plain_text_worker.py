@@ -14,7 +14,7 @@ class PlainTextWorkerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             value = '한글 <b>& literal\r\n# heading\n\n끝 😀'
-            for encoding in ('utf-8-sig', 'utf-16', 'cp949'):
+            for encoding in ('utf-8-sig', 'utf-16', 'utf-16-le', 'utf-16-be', 'cp949'):
                 with self.subTest(encoding=encoding):
                     text = value if encoding != 'cp949' else value.replace('😀', '문자')
                     source = root / (encoding + '.txt')

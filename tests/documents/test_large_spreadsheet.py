@@ -7,12 +7,32 @@ from unittest.mock import patch
 
 import pymupdf as fitz
 from openpyxl import Workbook
+from openpyxl.worksheet.formula import ArrayFormula
 
 from magic_converter.core.documents.large_spreadsheet import large_workbook,stream_workbook_pdf
 from magic_converter.core.jobs.job_control import JobCancelled
 
 
 class LargeSpreadsheetTests(unittest.TestCase):
+    def test_array_formula_and_literal_formula_text_are_distinct(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "formula.xlsx"
+            book = Workbook()
+            sheet = book.active
+            sheet.append([2, 3, ArrayFormula("C1:C2", "=A1:A2*B1:B2"), "=2+2"])
+            sheet["D1"].data_type = "s"
+            book.save(source)
+            book.close()
+            destination = source.with_suffix(".pdf")
+            report = stream_workbook_pdf(source, destination)
+            self.assertEqual(report["formulas"], 1)
+            with fitz.open(destination) as document:
+                text = "".join(page.get_text() for page in document)
+            self.assertIn("C1 =A1:A2*B1:B2", text)
+            self.assertIn("C1:C2", text)
+            self.assertIn("D1 =2+2", text)
+            self.assertNotIn("object at", text)
+
     def test_dense_shaped_pages_keep_long_values_across_lanes_and_continuations(self):
         from tools.validation.verify_large_workbook import source_contents,pdf_contents
         with tempfile.TemporaryDirectory()as folder:

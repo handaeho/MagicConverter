@@ -214,6 +214,9 @@ app/magic_converter/core/documents/__pycache__/rich_hwp.cpython-314.pyc
 app/magic_converter/core/documents/__pycache__/spreadsheet_converter.cpython-314.opt-1.pyc
 app/magic_converter/core/documents/__pycache__/spreadsheet_converter.cpython-314.opt-2.pyc
 app/magic_converter/core/documents/__pycache__/spreadsheet_converter.cpython-314.pyc
+app/magic_converter/core/documents/__pycache__/spreadsheet_formula.cpython-314.opt-1.pyc
+app/magic_converter/core/documents/__pycache__/spreadsheet_formula.cpython-314.opt-2.pyc
+app/magic_converter/core/documents/__pycache__/spreadsheet_formula.cpython-314.pyc
 app/magic_converter/core/documents/__pycache__/table_layout.cpython-314.opt-1.pyc
 app/magic_converter/core/documents/__pycache__/table_layout.cpython-314.opt-2.pyc
 app/magic_converter/core/documents/__pycache__/table_layout.cpython-314.pyc
@@ -239,6 +242,7 @@ app/magic_converter/core/documents/large_spreadsheet.py
 app/magic_converter/core/documents/paragraph_layout.py
 app/magic_converter/core/documents/rich_hwp.py
 app/magic_converter/core/documents/spreadsheet_converter.py
+app/magic_converter/core/documents/spreadsheet_formula.py
 app/magic_converter/core/documents/table_layout.py
 app/magic_converter/core/documents/text_codec.py
 app/magic_converter/core/documents/word_character_metrics.py
