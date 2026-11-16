@@ -1,6 +1,8 @@
 #![cfg(windows)]
+#![windows_subsystem = "windows"]
 
 mod platform;
+mod wizard;
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -10,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
+use std::os::windows::process::CommandExt;
 use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
 use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
@@ -114,6 +117,7 @@ fn register(folder: &Path, id: Uuid) -> Result<()> {
     let migration = std::process::Command::new(worker)
         .args(["presets", "--json"])
         .env_remove("MAGIC_CONVERTER_PROFILE_DIR")
+        .creation_flags(platform::CREATE_NO_WINDOW)
         .output()?;
     if !migration.status.success() {
         return Err(format!(
@@ -481,7 +485,7 @@ fn previous_rust_target(executable: &Path) -> Result<bool> {
     matches_file(executable, member)
 }
 
-fn install(exe: &Path, folder: &Path) -> Result<Value> {
+fn install(exe: &Path, folder: &Path, mut progress: impl FnMut(usize, usize)) -> Result<Value> {
     let mut archive = payload(exe)?;
     let manifest: Manifest = {
         let file = archive.by_name(MANIFEST)?;
@@ -503,10 +507,11 @@ fn install(exe: &Path, folder: &Path) -> Result<Value> {
         if previous.payload != manifest {
             return Err("기존 설치 폴더의 내용이 다릅니다.".into());
         }
-        for member in &manifest.files {
+        for (index, member) in manifest.files.iter().enumerate() {
             if !matches_file(&safe_path(folder, &member.path)?, member)? {
                 return Err("기존 설치 파일을 확인하지 못했습니다.".into());
             }
+            progress(index + 1, manifest.files.len());
         }
         register(folder, previous.id)?;
         return Ok(
@@ -516,7 +521,7 @@ fn install(exe: &Path, folder: &Path) -> Result<Value> {
     let stage = tempfile::Builder::new()
         .prefix(".magicconverter-install-")
         .tempdir_in(base)?;
-    for member in &manifest.files {
+    for (index, member) in manifest.files.iter().enumerate() {
         let mut entry = archive.by_name(&member.path)?;
         if !entry.is_file() || entry.size() != member.bytes {
             return Err("설치 파일의 형식이나 크기가 목록과 다릅니다.".into());
@@ -535,6 +540,7 @@ fn install(exe: &Path, folder: &Path) -> Result<Value> {
             return Err("설치 파일의 SHA-256이 일치하지 않습니다.".into());
         }
         output.sync_all()?;
+        progress(index + 1, manifest.files.len());
     }
     let count = manifest.files.len();
     let id = Uuid::new_v4();
@@ -551,7 +557,7 @@ fn install(exe: &Path, folder: &Path) -> Result<Value> {
     Ok(json!({"ok": true, "location": folder, "already_installed": false, "files": count}))
 }
 
-fn uninstall(folder: &Path) -> Result<Value> {
+fn uninstall(folder: &Path, mut progress: impl FnMut(usize, usize)) -> Result<Value> {
     platform::plain(folder)?;
     if !folder.exists() {
         return Ok(json!({"ok": true, "location": folder, "removed": 0, "preserved": []}));
@@ -561,20 +567,20 @@ fn uninstall(folder: &Path) -> Result<Value> {
     let mut preserved = Vec::new();
     let mut removed = 0;
     let mut directories = BTreeSet::new();
-    for member in &marker.payload.files {
+    for (index, member) in marker.payload.files.iter().enumerate() {
         let path = safe_path(folder, &member.path)?;
-        if !path.exists() {
-            continue;
+        if path.exists() {
+            if matches_file(&path, member)? {
+                for directory in path.ancestors().skip(1).take_while(|path| *path != folder) {
+                    directories.insert(directory.to_owned());
+                }
+                fs::remove_file(path)?;
+                removed += 1;
+            } else {
+                preserved.push(member.path.clone());
+            }
         }
-        if !matches_file(&path, member)? {
-            preserved.push(member.path.clone());
-            continue;
-        }
-        for directory in path.ancestors().skip(1).take_while(|path| *path != folder) {
-            directories.insert(directory.to_owned());
-        }
-        fs::remove_file(path)?;
-        removed += 1;
+        progress(index + 1, marker.payload.files.len());
     }
     platform::remove_shortcut(folder)?;
     platform::remove_shell(folder)?;
@@ -593,80 +599,59 @@ fn uninstall(folder: &Path) -> Result<Value> {
     Ok(json!({"ok": true, "location": folder, "removed": removed, "preserved": preserved}))
 }
 
+fn uninstall_folder(parent: Option<&Path>) -> Result<PathBuf> {
+    let location = if parent.is_none() { saved_location()? } else { None };
+    let folder = install_folder(parent.or(location.as_ref().map(|item| item.parent.as_path())))?;
+    if let Some(location) = &location
+        && folder.exists()
+        && marker(&folder)?.id != location.id
+    {
+        return Err("설치 위치 기록과 설치 폴더의 식별자가 다릅니다.".into());
+    }
+    Ok(folder)
+}
+
+fn remove_installation(folder: &Path, progress: impl FnMut(usize, usize)) -> Result<Value> {
+    let report = uninstall(folder, progress)?;
+    if saved_location().ok().flatten().is_some_and(|saved| {
+        folder.parent().is_some_and(|parent| platform::same(&saved.parent, parent))
+    }) {
+        match fs::remove_file(location_record()?) {
+            Ok(()) => (),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => (),
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(report)
+}
+
 fn execute(command: Command) -> Result<Value> {
     match command {
         Command::Bundle { payload, output } => package(&payload, &output),
         Command::Install { parent, quiet } => {
-            let parent = if !quiet && parent.is_none() {
-                let default = install_folder(None)?;
-                let Some(parent) = platform::choose_install_parent(&default)? else {
-                    return Ok(json!({"ok": true, "cancelled": true}));
-                };
-                Some(parent)
-            } else {
-                parent
-            };
             let folder = install_folder(parent.as_deref())?;
-            if !quiet
-                && !platform::confirm(&format!(
-                    "{PRODUCT} {VERSION}\n\n{}\n\nMagicConverter는 AGPL-3.0-or-later로 제공됩니다. 설치된 LICENSE 및 각 엔진의 라이선스 안내를 참조하세요.\n\n이 폴더에 설치하시겠습니까?",
-                    folder.display()
-                ))
-            {
-                return Ok(json!({"ok": true, "cancelled": true}));
+            if quiet {
+                install(&env::current_exe()?, &folder, |_, _| {})
+            } else {
+                wizard::run(wizard::Mode::Install, folder)
             }
-            let report = install(&env::current_exe()?, &folder)?;
-            if !quiet && platform::confirm("설치가 완료되었습니다. MagicConverter를 여시겠습니까?")
-            {
-                std::process::Command::new(folder.join("magic_converter.exe")).spawn()?;
-            }
-            Ok(report)
         }
         Command::Uninstall { parent, quiet } => {
-            let location = if parent.is_none() {
-                saved_location()?
+            let folder = uninstall_folder(parent.as_deref())?;
+            if quiet {
+                remove_installation(&folder, |_, _| {})
             } else {
-                None
-            };
-            let folder = install_folder(
-                parent
-                    .as_deref()
-                    .or(location.as_ref().map(|item| item.parent.as_path())),
-            )?;
-            if let Some(location) = &location
-                && folder.exists()
-                && marker(&folder)?.id != location.id
-            {
-                return Err("설치 위치 기록과 설치 폴더의 식별자가 다릅니다.".into());
+                wizard::run(wizard::Mode::Remove, folder)
             }
-            if !quiet
-                && !platform::confirm(&format!(
-                    "{PRODUCT} {VERSION}\n\n{}\n\n설치 파일을 제거하시겠습니까?",
-                    folder.display()
-                ))
-            {
-                return Ok(json!({"ok": true, "cancelled": true}));
-            }
-            let report = uninstall(&folder)?;
-            if saved_location().ok().flatten().is_some_and(|saved| {
-                folder
-                    .parent()
-                    .is_some_and(|parent| platform::same(&saved.parent, parent))
-            }) {
-                fs::remove_file(location_record()?)?;
-            }
-            if !quiet {
-                platform::notice(
-                    "설치 파일을 제거했습니다. 설정과 변환 결과는 보존했습니다.",
-                    false,
-                );
-            }
-            Ok(report)
         }
     }
 }
 
 fn main() -> std::process::ExitCode {
+    let command_line = env::args_os().nth(1).is_some();
+    if command_line {
+        platform::connect_console();
+    }
     let cli = Cli::parse();
     let command = cli.command.unwrap_or_else(|| {
         if env::current_exe().ok().and_then(|path| {
@@ -702,9 +687,10 @@ fn main() -> std::process::ExitCode {
         result["ok"] = json!(false);
         result["report_error"] = json!(error.to_string());
     }
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&result).expect("valid result JSON")
-    );
+    if command_line {
+        let mut output = io::stdout().lock();
+        let _ = serde_json::to_writer_pretty(&mut output, &result);
+        let _ = writeln!(output);
+    }
     std::process::ExitCode::from(u8::from(result["ok"] != true))
 }

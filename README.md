@@ -1,4 +1,4 @@
-# MagicConverter 3.0.1 — Windows 파일 변환기
+# MagicConverter 3.0.2 — Windows 파일 변환기
 
 탐색기에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
 
@@ -6,19 +6,22 @@
 
 ## EXE로 시작하기
 
-[3.0.1 Windows x64 설치 ZIP](https://github.com/handaeho/MagicConverter/releases/download/v3.0.1/MagicConverter-3.0.1-Windows-x64.zip)의 압축을 풀고 `magic_converter-setup.exe`를 실행합니다. <br>
-제거할 때는 같은 ZIP의 `magic_converter-uninstall.exe`를 사용합니다.
+[MagicConverter 3.0.2 Windows x64 설치 ZIP 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.2/MagicConverter-3.0.2-Windows-x64.zip)
 
 Windows 10·11 x64용 Rust 앱입니다. <br>
-설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있습니다.
+설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있어 인터넷 연결과 Python 없이 설치하고 사용할 수 있습니다.
 
-1. 기본 설치 위치를 사용하거나 다른 상위 폴더를 고릅니다.
-2. 설치 위치와 라이선스 안내를 확인한 뒤 **예**를 누릅니다.
-3. **변환할 파일 고르기…**로 원본을 선택하고 작업을 고른 뒤 **변환 시작**을 누릅니다. 탐색기에서 파일을 끌 때 <kbd>Shift</kbd>를 누르면 변환 휠이 열리고, <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
+1. ZIP을 풀고 `magic_converter-setup.exe`를 더블클릭합니다. 설치 마법사의 환영 화면에서 **다음**을 누르고 라이선스 조건에 동의합니다.
+2. 기본 설치 위치를 사용하거나 **찾아보기**에서 상위 폴더를 고릅니다. 실제 설치 위치를 확인한 뒤 **설치**를 누릅니다.
+3. 설치가 끝나면 **MagicConverter 실행**을 선택한 채 **마침**을 누릅니다.
+
+제거하려면 MagicConverter를 종료하고 같은 ZIP의 `magic_converter-uninstall.exe`를 실행합니다. 제거 마법사에서 설치 위치를 확인한 뒤 **제거**와 **마침**을 차례로 누릅니다. 설정과 변환 기록, 원본과 결과 파일은 보존됩니다.
+
+앱에서 **변환할 파일 고르기…**로 원본을 선택하고 작업을 고른 뒤 **변환 시작**을 누릅니다. 탐색기에서 파일을 끌 때 <kbd>Shift</kbd>를 누르면 변환 휠이 열리고, <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
 
 고급 설정에서는 목록과 선택 창에서 값을 고를 수 있습니다. 일반 설정과 고급 설정의 항목에 마우스를 올리면 한국어 도움말이 표시됩니다.
 
-[설치 및 업그레이드](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [3.0.1 변경 사항](docs/release/3.0.1.md) · [릴리스 목록](https://github.com/handaeho/MagicConverter/releases)
+[설치 및 업그레이드](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [3.0.2 변경 사항](docs/release/3.0.2.md) · [릴리스 목록](https://github.com/handaeho/MagicConverter/releases)
 
 일반 PNG 변환은 지원하는 EXIF 정보를 보존합니다. <br> 
 공유용 파일에서 작성자나 위치 등 메타데이터를 지우려면 도구 휠에서 **메타데이터 제거**를 선택하세요.

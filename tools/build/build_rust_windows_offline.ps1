@@ -145,6 +145,26 @@ if ($PublishedRuntimeAssets) {
     if ($LASTEXITCODE -ne 0) { throw "Published runtime preparation failed with exit $LASTEXITCODE." }
 }
 $installer = Join-Path $build 'installer/release/magic-converter-windows-setup.exe'
-& $installer bundle --payload $payload --output (Join-Path $output 'magic_converter-setup.exe')
-if ($LASTEXITCODE -ne 0) { throw "Rust bundle creation failed with exit $LASTEXITCODE." }
+$setup = Join-Path $output 'magic_converter-setup.exe'
+# Wait explicitly because PowerShell can launch a GUI executable asynchronously.
+$startInfo = [Diagnostics.ProcessStartInfo]::new($installer)
+$startInfo.Arguments = 'bundle --payload "{0}" --output "{1}"' -f $payload.TrimEnd('\'), $setup
+$startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $true
+$startInfo.RedirectStandardOutput = $true
+$startInfo.RedirectStandardError = $true
+$process = [Diagnostics.Process]::Start($startInfo)
+try {
+    $standardOutput = $process.StandardOutput.ReadToEndAsync()
+    $standardError = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    $bundleReport = $standardOutput.GetAwaiter().GetResult()
+    $diagnostic = $standardError.GetAwaiter().GetResult()
+    if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $setup -PathType Leaf)) {
+        throw "Rust bundle creation failed with exit $($process.ExitCode). $diagnostic $bundleReport"
+    }
+    $bundleReport | Write-Output
+} finally {
+    $process.Dispose()
+}
 Copy-Item -LiteralPath $installer -Destination (Join-Path $output 'magic_converter-uninstall.exe')

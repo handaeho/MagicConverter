@@ -4,6 +4,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::ptr::{null, null_mut};
 use std::thread;
@@ -17,16 +18,41 @@ use windows::Win32::UI::Shell::{
     IShellLinkW, KF_FLAG_DEFAULT, SHGetKnownFolderPath, SIGDN_FILESYSPATH, ShellLink,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    IDNO, IDYES, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONQUESTION, MB_OK, MB_YESNO,
-    MB_YESNOCANCEL, MessageBoxW,
+    MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MessageBoxW,
 };
 use windows::core::{Interface, PCWSTR};
+use windows_sys::Win32::Foundation::{HWND, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_FLAG_DELETE_ON_CLOSE, FILE_SHARE_READ, MoveFileExW,
 };
 use windows_sys::Win32::System::Registry::{
     HKEY_CURRENT_USER, RRF_RT_REG_SZ, RegDeleteKeyW, RegGetValueW,
 };
+use windows_sys::Win32::System::Console::{
+    ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
+    SetStdHandle,
+};
+
+pub const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+pub fn connect_console() {
+    unsafe {
+        let handles = [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE]
+            .map(|kind| (kind, GetStdHandle(kind)));
+        let valid = |handle: windows_sys::Win32::Foundation::HANDLE| {
+            !handle.is_null() && handle != INVALID_HANDLE_VALUE
+        };
+        if handles.iter().any(|&(_, handle)| !valid(handle))
+            && AttachConsole(ATTACH_PARENT_PROCESS) != 0
+        {
+            for (kind, handle) in handles {
+                if valid(handle) {
+                    SetStdHandle(kind, handle);
+                }
+            }
+        }
+    }
+}
 
 fn wide(value: impl AsRef<OsStr>) -> Vec<u16> {
     value.as_ref().encode_wide().chain([0]).collect()
@@ -252,6 +278,7 @@ pub fn register_shell(folder: &Path) -> Result<()> {
         if worker.is_file()
             && !std::process::Command::new(worker)
                 .args(["shell", "install"])
+                .creation_flags(CREATE_NO_WINDOW)
                 .output()?
                 .status
                 .success()
@@ -288,10 +315,6 @@ fn message_box(
     }
 }
 
-pub fn confirm(message: &str) -> bool {
-    message_box(message, MB_YESNO | MB_ICONQUESTION) == IDYES
-}
-
 pub fn notice(message: &str, error: bool) {
     message_box(
         message,
@@ -304,34 +327,22 @@ pub fn notice(message: &str, error: bool) {
     );
 }
 
-pub fn choose_install_parent(default: &Path) -> Result<Option<PathBuf>> {
-    match message_box(
-        &format!(
-            "{PRODUCT} {VERSION}\n\n기본 위치에 설치하시겠습니까?\n{}\n\n아니요를 선택하면 다른 상위 폴더를 고를 수 있습니다.",
-            default.display()
-        ),
-        MB_YESNOCANCEL | MB_ICONQUESTION,
-    ) {
-        IDYES => Ok(default.parent().map(Path::to_path_buf)),
-        IDNO => {
-            let _apartment = Apartment::new()?;
-            let dialog: IFileOpenDialog =
-                unsafe { CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)? };
-            unsafe {
-                dialog.SetOptions(dialog.GetOptions()? | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)?;
-                dialog.SetTitle(PCWSTR(wide("MagicConverter 설치 상위 폴더").as_ptr()))?;
-                if let Err(error) = dialog.Show(None) {
-                    if error.code().0 as u32 == 0x800704c7 {
-                        return Ok(None);
-                    }
-                    return Err(error.into());
-                }
-                let raw = dialog.GetResult()?.GetDisplayName(SIGDN_FILESYSPATH)?;
-                let path = PathBuf::from(OsString::from_wide(raw.as_wide()));
-                CoTaskMemFree(Some(raw.0.cast()));
-                Ok(Some(path))
+pub fn browse_install_parent(owner: HWND) -> Result<Option<PathBuf>> {
+    let _apartment = Apartment::new()?;
+    let dialog: IFileOpenDialog =
+        unsafe { CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)? };
+    unsafe {
+        dialog.SetOptions(dialog.GetOptions()? | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)?;
+        dialog.SetTitle(PCWSTR(wide("MagicConverter 설치 상위 폴더").as_ptr()))?;
+        if let Err(error) = dialog.Show(Some(windows::Win32::Foundation::HWND(owner))) {
+            if error.code().0 as u32 == 0x800704c7 {
+                return Ok(None);
             }
+            return Err(error.into());
         }
-        _ => Ok(None),
+        let raw = dialog.GetResult()?.GetDisplayName(SIGDN_FILESYSPATH)?;
+        let path = PathBuf::from(OsString::from_wide(raw.as_wide()));
+        CoTaskMemFree(Some(raw.0.cast()));
+        Ok(Some(path))
     }
 }
