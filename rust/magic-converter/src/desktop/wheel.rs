@@ -482,6 +482,83 @@ fn rgb(r: u32, g: u32, b: u32) -> u32 {
     r | g << 8 | b << 16
 }
 
+// Keep the full text rectangle in the annulus and inside both radial edges.
+fn label_half_width(angle: f64, step: f64, half_height: f64) -> f64 {
+    let (sin, cos) = angle.sin_cos();
+    let (x, y) = (106.0 * cos, 106.0 * sin);
+    let inside = |width: f64| {
+        let near_x = (x.abs() - width).max(0.0);
+        let near_y = (y.abs() - half_height).max(0.0);
+        if near_x.hypot(near_y) < 60.0 || (x.abs() + width).hypot(y.abs() + half_height) > 145.0 {
+            return false;
+        }
+        if step == TAU {
+            return true;
+        }
+        let (a, b) = (angle - step / 2.0, angle + step / 2.0);
+        [(-a.sin(), a.cos()), (b.sin(), -b.cos())]
+            .into_iter()
+            .all(|(nx, ny)| nx * x + ny * y - nx.abs() * width - ny.abs() * half_height >= 3.0)
+    };
+    let (mut low, mut high) = (0.0, 56.0);
+    for _ in 0..8 {
+        let width = (low + high) / 2.0;
+        if inside(width) {
+            low = width;
+        } else {
+            high = width;
+        }
+    }
+    low
+}
+
+fn draw_label(dc: HDC, text: &str, mut bounds: RECT) {
+    let name = wide(text);
+    unsafe {
+        DrawTextW(
+            dc,
+            name.as_ptr(),
+            name.len() as i32 - 1,
+            &mut bounds,
+            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX,
+        );
+    }
+}
+
+fn label_width(dc: HDC, value: &str) -> i32 {
+    let value = wide(value);
+    let mut size = SIZE::default();
+    unsafe { GetTextExtentPoint32W(dc, value.as_ptr(), value.len() as i32 - 1, &mut size) };
+    size.cx
+}
+
+#[cfg(test)]
+#[test]
+fn labels_stay_inside_each_sector_and_clear_the_hub() {
+    for count in 1..=12 {
+        let step = TAU / f64::from(count);
+        for slot in 0..count {
+            let angle = -FRAC_PI_2 + f64::from(slot) * step;
+            for height in [10.0, 19.0] {
+                let width = label_half_width(angle, step, height);
+                if height == 10.0 {
+                    assert!(width > 10.0, "{count} slots, slot {slot}");
+                }
+                for x in [-width, width] {
+                    for y in [-height, height] {
+                        let x = angle.cos() * 106.0 + x;
+                        let y = angle.sin() * 106.0 + y;
+                        let offset = (y.atan2(x) - angle + std::f64::consts::PI).rem_euclid(TAU)
+                            - std::f64::consts::PI;
+                        assert!(offset.abs() < step / 2.0);
+                        assert!((60.0..=145.0).contains(&x.hypot(y)));
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn paint(window: HWND, wheel: &Wheel) {
     let mut info = PAINTSTRUCT::default();
     let dc = unsafe { BeginPaint(window, &mut info) };
@@ -490,9 +567,36 @@ fn paint(window: HWND, wheel: &Wheel) {
     }
     let scale = f64::from(wheel.size) / 320.0;
     let p = |n: f64| (n * scale).round() as i32;
+    let font = unsafe {
+        CreateFontW(
+            -p(13.0),
+            0,
+            0,
+            0,
+            FW_NORMAL as i32,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET as u32,
+            OUT_DEFAULT_PRECIS as u32,
+            CLIP_DEFAULT_PRECIS as u32,
+            CLEARTYPE_QUALITY as u32,
+            DEFAULT_PITCH as u32,
+            wide("Malgun Gothic").as_ptr(),
+        )
+    };
+    let old_font = unsafe {
+        SelectObject(
+            dc,
+            if font.is_null() {
+                GetStockObject(DEFAULT_GUI_FONT)
+            } else {
+                font
+            },
+        )
+    };
     unsafe {
         SelectObject(dc, GetStockObject(NULL_PEN));
-        SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
         SetBkMode(dc, TRANSPARENT as i32);
         SetArcDirection(dc, AD_CLOCKWISE);
     }
@@ -527,12 +631,14 @@ fn paint(window: HWND, wheel: &Wheel) {
         for (index, slot) in wheel.slots.iter().enumerate() {
             let angle = -FRAC_PI_2 + index as f64 * step;
             let (x, y) = (160.0 + angle.cos() * 106.0, 160.0 + angle.sin() * 106.0);
-            let name = wide(slot.recipe["name"].as_str().unwrap_or_default());
-            let mut bounds = RECT {
-                left: p(x - 45.0),
-                top: p(y - 10.0),
-                right: p(x + 45.0),
-                bottom: p(y + 10.0),
+            let name = slot.recipe["name"].as_str().unwrap_or_default();
+            let single = label_half_width(angle, step, 10.0);
+            let double = label_half_width(angle, step, 19.0);
+            let bounds = |half_width, top, bottom| RECT {
+                left: p(x - half_width),
+                top: p(y + top),
+                right: p(x + half_width),
+                bottom: p(y + bottom),
             };
             unsafe {
                 SetTextColor(
@@ -543,43 +649,78 @@ fn paint(window: HWND, wheel: &Wheel) {
                         rgb(186, 187, 190)
                     },
                 );
-                DrawTextW(
-                    dc,
-                    name.as_ptr(),
-                    name.len() as i32 - 1,
-                    &mut bounds,
-                    DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS,
-                );
             }
+            if label_width(dc, name) > p(2.0 * single) && double >= 14.0 {
+                let limit = p(2.0 * double).saturating_sub(1);
+                let fit = name
+                    .char_indices()
+                    .skip(1)
+                    .take_while(|&(index, _)| label_width(dc, &name[..index]) <= limit)
+                    .last();
+                if let Some((end, _)) = fit {
+                    let prefix = &name[..end];
+                    let split = prefix.rfind(char::is_whitespace).unwrap_or(end);
+                    let split = if split <= end / 2 { end } else { split };
+                    let (first, second) = name.split_at(split);
+                    draw_label(dc, first.trim(), bounds(double, -19.0, 0.0));
+                    draw_label(dc, second.trim(), bounds(double, 0.0, 19.0));
+                    continue;
+                }
+            }
+            draw_label(dc, name, bounds(single, -10.0, 10.0));
         }
     }
     brush(dc, rgb(36, 39, 44), || unsafe {
         Ellipse(dc, p(104.0), p(104.0), p(216.0), p(216.0));
     });
-    let title = wide(
-        if wheel.requires_release() && wheel.inside && !wheel.released {
+    let requires_release = wheel.requires_release() && wheel.inside && !wheel.released;
+    let hovered = wheel
+        .hover
+        .and_then(|index| wheel.slots.get(index))
+        .and_then(|slot| slot.recipe["name"].as_str());
+    let center = |top, bottom| RECT {
+        left: p(117.0),
+        right: p(203.0),
+        top: p(top),
+        bottom: p(bottom),
+    };
+    unsafe {
+        SetTextColor(dc, rgb(247, 244, 242));
+    }
+    if let Some(name) = hovered {
+        let text = wide(name);
+        let mut bounds = center(130.0, if requires_release { 174.0 } else { 190.0 });
+        let mut measured = bounds;
+        let flags = DT_CENTER | DT_NOPREFIX | DT_WORDBREAK | DT_END_ELLIPSIS;
+        let height = unsafe {
+            DrawTextW(
+                dc,
+                text.as_ptr(),
+                text.len() as i32 - 1,
+                &mut measured,
+                flags | DT_CALCRECT,
+            )
+        };
+        bounds.top += ((bounds.bottom - bounds.top - height) / 2).max(0);
+        unsafe { DrawTextW(dc, text.as_ptr(), text.len() as i32 - 1, &mut bounds, flags) };
+        if requires_release {
+            draw_label(dc, "보조키 놓기", center(174.0, 190.0));
+        }
+    } else {
+        let title = if requires_release {
             "보조키 놓기"
         } else if wheel.mode == Some(Mode::Action) {
             "빠른 액션"
         } else {
             "변환"
-        },
-    );
-    let mut title_rect = RECT {
-        left: p(107.0),
-        right: p(213.0),
-        top: p(147.0),
-        bottom: p(173.0),
-    };
+        };
+        draw_label(dc, title, center(147.0, 173.0));
+    }
     unsafe {
-        SetTextColor(dc, rgb(247, 244, 242));
-        DrawTextW(
-            dc,
-            title.as_ptr(),
-            title.len() as i32 - 1,
-            &mut title_rect,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE,
-        );
+        SelectObject(dc, old_font);
+        if !font.is_null() {
+            DeleteObject(font);
+        }
         EndPaint(window, &info);
     }
 }

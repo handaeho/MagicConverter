@@ -478,7 +478,10 @@ fn previous_rust_target(executable: &Path) -> Result<bool> {
         return Ok(false);
     }
     validate_manifest(&manifest, &manifest.version)?;
-    let Some(member) = manifest.files.iter().find(|member| member.path == "magic_converter.exe")
+    let Some(member) = manifest
+        .files
+        .iter()
+        .find(|member| member.path == "magic_converter.exe")
     else {
         return Ok(false);
     };
@@ -557,72 +560,216 @@ fn install(exe: &Path, folder: &Path, mut progress: impl FnMut(usize, usize)) ->
     Ok(json!({"ok": true, "location": folder, "already_installed": false, "files": count}))
 }
 
-fn uninstall(folder: &Path, mut progress: impl FnMut(usize, usize)) -> Result<Value> {
-    platform::plain(folder)?;
-    if !folder.exists() {
-        return Ok(json!({"ok": true, "location": folder, "removed": 0, "preserved": []}));
-    }
-    let _lock = platform::lock(folder.parent().ok_or("설치 위치의 상위 폴더가 없습니다.")?)?;
-    let marker = marker(folder)?;
-    let mut preserved = Vec::new();
-    let mut removed = 0;
-    let mut directories = BTreeSet::new();
-    for (index, member) in marker.payload.files.iter().enumerate() {
-        let path = safe_path(folder, &member.path)?;
-        if path.exists() {
-            if matches_file(&path, member)? {
-                for directory in path.ancestors().skip(1).take_while(|path| *path != folder) {
-                    directories.insert(directory.to_owned());
-                }
-                fs::remove_file(path)?;
-                removed += 1;
+fn in_use_message(apps: &[String]) -> String {
+    let names = apps.iter().take(5).cloned().collect::<Vec<_>>().join(", ");
+    let magic_converter = apps.iter().any(|name| {
+        let name = name.to_ascii_lowercase();
+        name.contains("magicconverter") || name.contains("magic_converter")
+    });
+    let reason = if magic_converter {
+        "MagicConverter가 실행 중입니다."
+    } else {
+        "다른 프로그램이 MagicConverter 설치 파일을 사용 중입니다."
+    };
+    format!(
+        "{reason}\r\n사용 중인 프로그램: {names}\r\n\r\n진행 중인 변환을 마친 뒤, 작업 표시줄 시계 옆의 MagicConverter 아이콘을 우클릭하여 ‘종료’를 선택하세요. 설치 파일을 사용 중인 다른 프로그램도 닫은 후 다시 시도하세요."
+    )
+}
+
+fn removal_error(
+    operation: &str,
+    path: &Path,
+    error: Box<dyn std::error::Error>,
+) -> Box<dyn std::error::Error> {
+    use windows_sys::Win32::Foundation::{
+        ERROR_ACCESS_DENIED, ERROR_LOCK_VIOLATION, ERROR_SHARING_VIOLATION,
+    };
+    let code = error
+        .downcast_ref::<io::Error>()
+        .and_then(io::Error::raw_os_error);
+    let detail = match code.map(|code| code as u32) {
+        Some(ERROR_ACCESS_DENIED | ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION) => {
+            let apps = path.is_file().then(|| {
+                platform::applications_using(&[path.to_owned()], false).unwrap_or_default()
+            });
+            if let Some(apps) = apps.filter(|apps| !apps.is_empty()) {
+                in_use_message(&apps)
+            } else if code == Some(ERROR_ACCESS_DENIED as i32) {
+                "Windows에서 액세스를 거부했습니다. 설치에 사용한 Windows 계정과 아래 위치의 삭제 권한을 확인하세요. 해당 위치를 열어 둔 프로그램이 있으면 닫은 뒤 다시 시도하세요.".to_owned()
             } else {
-                preserved.push(member.path.clone());
+                "다른 프로그램이 아래 파일 또는 폴더를 사용 중입니다. 이 위치를 열어 둔 프로그램을 닫은 뒤 다시 시도하세요.".to_owned()
             }
         }
-        progress(index + 1, marker.payload.files.len());
+        _ if code.is_none() && !error.is::<io::Error>() => return error,
+        _ => error.to_string(),
+    };
+    format!(
+        "{operation}에 실패했습니다.\r\n\r\n{detail}\r\n\r\n위치: {}",
+        path.display()
+    )
+    .into()
+}
+
+fn remove_file(path: &Path, operation: &str) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(removal_error(operation, path, error.into())),
     }
-    platform::remove_shortcut(folder)?;
-    platform::remove_shell(folder)?;
-    fs::remove_file(folder.join(MARKER))?;
-    for directory in directories.into_iter().rev().chain([folder.to_owned()]) {
-        match fs::remove_dir(directory) {
-            Ok(()) => (),
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::DirectoryNotEmpty | io::ErrorKind::NotFound
-                ) => {}
-            Err(error) => return Err(error.into()),
+}
+
+fn remove_installation(folder: &Path, mut progress: impl FnMut(usize, usize)) -> Result<Value> {
+    platform::plain(folder)
+        .map_err(|error| removal_error("설치 폴더 확인", folder, error.into()))?;
+    let matching_record = || -> Result<Option<PathBuf>> {
+        let matching = saved_location().ok().flatten().is_some_and(|saved| {
+            folder
+                .parent()
+                .is_some_and(|parent| platform::same(&saved.parent, parent))
+        });
+        matching.then(location_record).transpose()
+    };
+    if !folder.exists() {
+        if let Some(record) = matching_record()? {
+            remove_file(&record, "설치 위치 기록 정리")?;
+        }
+        return Ok(json!({"ok": true, "location": folder, "removed": 0, "preserved": []}));
+    }
+    let parent = folder.parent().ok_or("설치 위치의 상위 폴더가 없습니다.")?;
+    let _lock = platform::lock(parent).map_err(|error| {
+        if error.kind() == io::ErrorKind::AlreadyExists {
+            "다른 설치 또는 제거 작업이 진행 중입니다. 해당 작업을 마친 뒤 다시 시도하세요.".into()
+        } else {
+            removal_error("설치 폴더 잠금", parent, error.into())
+        }
+    })?;
+    let marker_path = folder.join(MARKER);
+    let marker =
+        marker(folder).map_err(|error| removal_error("설치 기록 확인", &marker_path, error))?;
+    let mut present = Vec::new();
+    let mut directories = BTreeSet::new();
+    for member in &marker.payload.files {
+        let path = safe_path(folder, &member.path)?;
+        platform::plain(&path)
+            .map_err(|error| removal_error("설치 파일 확인", &path, error.into()))?;
+        directories.extend(
+            path.ancestors()
+                .skip(1)
+                .take_while(|path| *path != folder)
+                .map(Path::to_owned),
+        );
+        if path
+            .try_exists()
+            .map_err(|error| removal_error("설치 파일 확인", &path, error.into()))?
+        {
+            present.push((path, member));
         }
     }
+    let executables: Vec<_> = present
+        .iter()
+        .filter(|(path, _)| {
+            path.extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+                && path.is_file()
+        })
+        .map(|(path, _)| path.clone())
+        .collect();
+    if let Ok(apps) = platform::applications_using(&executables, true)
+        && !apps.is_empty()
+    {
+        return Err(in_use_message(&apps).into());
+    }
+
+    // Verify every deletion before removing the first file so a normal lock
+    // or permission failure does not leave a partially removed installation.
+    let record = matching_record()?;
+    for path in std::iter::once(&marker_path).chain(&record) {
+        platform::check_delete(path)
+            .map_err(|error| removal_error("설치 기록 확인", path, error))?;
+    }
+    let mut preserved = Vec::new();
+    let mut removable = Vec::new();
+    for (path, member) in present {
+        if matches_file(&path, member)
+            .map_err(|error| removal_error("설치 파일 확인", &path, error))?
+        {
+            platform::check_delete(&path)
+                .map_err(|error| removal_error("파일 삭제 권한 확인", &path, error))?;
+            removable.push((path, member));
+        } else {
+            preserved.push(member.path.clone());
+        }
+    }
+    let mut removed = 0;
+    for (index, (path, member)) in removable.iter().enumerate() {
+        if matches_file(path, member)
+            .map_err(|error| removal_error("설치 파일 확인", path, error))?
+        {
+            remove_file(path, "설치 파일 제거")?;
+            removed += 1;
+        } else {
+            preserved.push(member.path.clone());
+        }
+        progress(index + 1, removable.len());
+    }
+    platform::remove_shortcut(folder)
+        .map_err(|error| removal_error("시작 메뉴 바로 가기 제거", folder, error))?;
+    platform::remove_shell(folder)
+        .map_err(|error| removal_error("탐색기 메뉴 제거", folder, error))?;
+    for directory in directories.into_iter().rev() {
+        remove_empty_dir(&directory)?;
+    }
+    if let Some(record) = record {
+        remove_file(&record, "설치 위치 기록 정리")?;
+    }
+    remove_file(&marker_path, "설치 기록 제거")?;
+    remove_empty_dir(folder)?;
     Ok(json!({"ok": true, "location": folder, "removed": removed, "preserved": preserved}))
 }
 
+fn remove_empty_dir(directory: &Path) -> Result<()> {
+    platform::plain(directory)
+        .map_err(|error| removal_error("설치 폴더 확인", directory, error.into()))?;
+    match fs::remove_dir(directory) {
+        Ok(()) => Ok(()),
+        Err(error)
+            if matches!(
+                error.kind(),
+                io::ErrorKind::DirectoryNotEmpty | io::ErrorKind::NotFound
+            ) =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(removal_error("설치 폴더 정리", directory, error.into())),
+    }
+}
+
 fn uninstall_folder(parent: Option<&Path>) -> Result<PathBuf> {
-    let location = if parent.is_none() { saved_location()? } else { None };
-    let folder = install_folder(parent.or(location.as_ref().map(|item| item.parent.as_path())))?;
+    let location = if parent.is_none() {
+        let record = program_root()?.join(format!("install-location-{VERSION}.json"));
+        saved_location().map_err(|error| removal_error("설치 위치 기록 읽기", &record, error))?
+    } else {
+        None
+    };
+    let default;
+    let base = if let Some(base) = parent.or(location.as_ref().map(|item| item.parent.as_path())) {
+        base
+    } else {
+        default = program_root()?.join(VERSION);
+        &default
+    };
+    let folder =
+        install_folder(Some(base)).map_err(|error| removal_error("설치 폴더 확인", base, error))?;
     if let Some(location) = &location
         && folder.exists()
-        && marker(&folder)?.id != location.id
+        && marker(&folder)
+            .map_err(|error| removal_error("설치 기록 확인", &folder.join(MARKER), error))?
+            .id
+            != location.id
     {
         return Err("설치 위치 기록과 설치 폴더의 식별자가 다릅니다.".into());
     }
     Ok(folder)
-}
-
-fn remove_installation(folder: &Path, progress: impl FnMut(usize, usize)) -> Result<Value> {
-    let report = uninstall(folder, progress)?;
-    if saved_location().ok().flatten().is_some_and(|saved| {
-        folder.parent().is_some_and(|parent| platform::same(&saved.parent, parent))
-    }) {
-        match fs::remove_file(location_record()?) {
-            Ok(()) => (),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => (),
-            Err(error) => return Err(error.into()),
-        }
-    }
-    Ok(report)
 }
 
 fn execute(command: Command) -> Result<Value> {

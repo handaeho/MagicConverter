@@ -227,6 +227,10 @@ impl Wizard {
         self.page == Page::Welcome || (self.page == Page::Finished && self.answer["ok"] == true)
     }
 
+    fn can_retry_removal(&self) -> bool {
+        self.mode == Mode::Remove && self.page == Page::Finished && self.answer["ok"] == false
+    }
+
     fn step(&mut self, title: &str, subtitle: &str) {
         self.heading(title, [22, 12, 518, 25]);
         self.label(subtitle, [38, 42, 508, 34]);
@@ -334,10 +338,12 @@ impl Wizard {
                         self.check("MagicConverter 실행", LAUNCH, [222, 323, 370, 27], true);
                     }
                 } else {
-                    self.step(
-                        &format!("{action}를 완료하지 못했습니다"),
-                        "아래 오류 내용을 확인하세요.",
-                    );
+                    let guidance = if self.can_retry_removal() {
+                        "아래 사유를 해결한 뒤 ‘다시 시도’를 누르세요."
+                    } else {
+                        "아래 오류 내용을 확인하세요."
+                    };
+                    self.step(&format!("{action}를 완료하지 못했습니다"), guidance);
                     let error = self.answer["error"]
                         .as_str()
                         .unwrap_or("작업에 실패했습니다.")
@@ -349,12 +355,18 @@ impl Wizard {
         let caption = match self.page {
             Page::Review => action,
             Page::Finished if self.answer["ok"] == true => "마침",
+            Page::Finished if self.can_retry_removal() => "다시 시도",
             Page::Finished => "닫기",
             _ => "다음 >",
         };
         let back = self.button("< 이전", BACK, [337, 407, 90, 29]);
         let next = self.button(caption, NEXT, [435, 407, 90, 29]);
-        let cancel = self.button("취소", CANCEL, [533, 407, 90, 29]);
+        let close = if self.can_retry_removal() {
+            "닫기"
+        } else {
+            "취소"
+        };
+        let cancel = self.button(close, CANCEL, [533, 407, 90, 29]);
         let can_advance =
             self.page != Page::Progress && (self.page != Page::License || self.agreed);
         unsafe {
@@ -368,7 +380,10 @@ impl Wizard {
             EnableWindow(next, i32::from(can_advance));
             EnableWindow(
                 cancel,
-                i32::from(!matches!(self.page, Page::Progress | Page::Finished)),
+                i32::from(
+                    !matches!(self.page, Page::Progress | Page::Finished)
+                        || self.can_retry_removal(),
+                ),
             );
             if can_advance {
                 SetFocus(next);
@@ -429,7 +444,14 @@ impl Wizard {
                 Work::Progress(done, total) => {
                     set_text(
                         self.control(STATUS),
-                        &format!("파일 확인 중 ({done}/{total})"),
+                        &format!(
+                            "파일 {} 중 ({done}/{total})",
+                            if self.mode == Mode::Remove {
+                                "제거"
+                            } else {
+                                "확인"
+                            }
+                        ),
                     );
                     unsafe { SendMessageW(self.control(BAR), PBM_SETPOS, done * 100 / total, 0) };
                 }
@@ -464,7 +486,10 @@ impl Wizard {
                 }
                 return Ok(());
             }
-            CANCEL if self.page != Page::Progress && self.page != Page::Finished => {
+            CANCEL
+                if !matches!(self.page, Page::Progress | Page::Finished)
+                    || self.can_retry_removal() =>
+            {
                 unsafe { DestroyWindow(self.window) };
                 return Ok(());
             }
@@ -492,6 +517,7 @@ impl Wizard {
                         Page::Review
                     }
                     Page::Review => return self.start(),
+                    Page::Finished if self.can_retry_removal() => return self.start(),
                     Page::Finished => {
                         if self.mode == Mode::Install
                             && self.answer["ok"] == true

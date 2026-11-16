@@ -751,6 +751,10 @@ impl Session<'_> {
             &started,
             clock.elapsed(),
         )?;
+        #[cfg(windows)]
+        if let Some(guard) = &guard {
+            guard.finish(&job);
+        }
         Ok(job)
     }
 

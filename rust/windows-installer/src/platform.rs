@@ -21,24 +21,31 @@ use windows::Win32::UI::WindowsAndMessaging::{
     MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MessageBoxW,
 };
 use windows::core::{Interface, PCWSTR};
-use windows_sys::Win32::Foundation::{HWND, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Foundation::{CloseHandle, ERROR_MORE_DATA, HWND, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::{
-    FILE_FLAG_DELETE_ON_CLOSE, FILE_SHARE_READ, MoveFileExW,
-};
-use windows_sys::Win32::System::Registry::{
-    HKEY_CURRENT_USER, RRF_RT_REG_SZ, RegDeleteKeyW, RegGetValueW,
+    DELETE, FILE_FLAG_DELETE_ON_CLOSE, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    MoveFileExW,
 };
 use windows_sys::Win32::System::Console::{
     ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
     SetStdHandle,
+};
+use windows_sys::Win32::System::Registry::{
+    HKEY_CURRENT_USER, RRF_RT_REG_SZ, RegDeleteKeyW, RegGetValueW,
+};
+use windows_sys::Win32::System::RestartManager::{
+    CCH_RM_SESSION_KEY, RM_PROCESS_INFO, RmEndSession, RmGetList, RmRegisterResources,
+    RmStartSession,
+};
+use windows_sys::Win32::System::Threading::{
+    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
 
 pub const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn connect_console() {
     unsafe {
-        let handles = [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE]
-            .map(|kind| (kind, GetStdHandle(kind)));
+        let handles = [STD_OUTPUT_HANDLE, STD_ERROR_HANDLE].map(|kind| (kind, GetStdHandle(kind)));
         let valid = |handle: windows_sys::Win32::Foundation::HANDLE| {
             !handle.is_null() && handle != INVALID_HANDLE_VALUE
         };
@@ -119,6 +126,123 @@ pub fn lock(directory: &Path) -> io::Result<File> {
         .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
         .share_mode(FILE_SHARE_READ)
         .open(directory.join(".magicconverter-installer.lock"))
+}
+
+pub fn check_delete(path: &Path) -> Result<()> {
+    if fs::metadata(path)?.permissions().readonly() {
+        return Err(format!(
+            "파일이 읽기 전용입니다. 파일 속성에서 ‘읽기 전용’을 해제한 뒤 다시 시도하세요.\r\n\r\n{}",
+            path.display()
+        ).into());
+    }
+    OpenOptions::new()
+        .access_mode(DELETE)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+        .open(path)?;
+    Ok(())
+}
+
+struct RestartSession(u32);
+
+impl Drop for RestartSession {
+    fn drop(&mut self) {
+        unsafe { RmEndSession(self.0) };
+    }
+}
+
+fn process_image(pid: u32) -> Option<PathBuf> {
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        return None;
+    }
+    let mut image = vec![0; 32_768];
+    let mut length = image.len() as u32;
+    let ok = unsafe { QueryFullProcessImageNameW(handle, 0, image.as_mut_ptr(), &mut length) };
+    unsafe { CloseHandle(handle) };
+    (ok != 0).then(|| PathBuf::from(OsString::from_wide(&image[..length as usize])))
+}
+
+pub fn applications_using(paths: &[PathBuf], running_images_only: bool) -> io::Result<Vec<String>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut session = 0;
+    let mut key = [0; CCH_RM_SESSION_KEY as usize + 1];
+    let code = unsafe { RmStartSession(&mut session, 0, key.as_mut_ptr()) };
+    if code != 0 {
+        return Err(io::Error::from_raw_os_error(code as i32));
+    }
+    let session = RestartSession(session);
+    let names: Vec<_> = paths.iter().map(wide).collect();
+    let pointers: Vec<_> = names.iter().map(|name| name.as_ptr()).collect();
+    let code = unsafe {
+        RmRegisterResources(
+            session.0,
+            pointers.len() as u32,
+            pointers.as_ptr(),
+            0,
+            null(),
+            0,
+            null(),
+        )
+    };
+    if code != 0 {
+        return Err(io::Error::from_raw_os_error(code as i32));
+    }
+    let mut processes = Vec::<RM_PROCESS_INFO>::new();
+    for _ in 0..4 {
+        let mut needed = 0;
+        let mut count = processes.len() as u32;
+        let mut reasons = 0;
+        let buffer = if processes.is_empty() {
+            null_mut()
+        } else {
+            processes.as_mut_ptr()
+        };
+        let code = unsafe { RmGetList(session.0, &mut needed, &mut count, buffer, &mut reasons) };
+        if code == 0 {
+            processes.truncate(count as usize);
+            let mut apps = Vec::new();
+            for process in processes {
+                if process.Process.dwProcessId == std::process::id() {
+                    continue;
+                }
+                let name = process
+                    .strAppName
+                    .split(|&unit| unit == 0)
+                    .next()
+                    .unwrap_or_default();
+                let mut name = String::from_utf16_lossy(name);
+                if running_images_only {
+                    let Some(image) = process_image(process.Process.dwProcessId) else {
+                        continue;
+                    };
+                    if !paths.iter().any(|path| same(&image, path)) {
+                        continue;
+                    }
+                    name = image
+                        .file_name()
+                        .unwrap_or(image.as_os_str())
+                        .to_string_lossy()
+                        .into_owned();
+                }
+                let name = if name.trim().is_empty() {
+                    format!("프로세스 {}", process.Process.dwProcessId)
+                } else {
+                    name
+                };
+                if !apps.contains(&name) {
+                    apps.push(name);
+                }
+            }
+            return Ok(apps);
+        }
+        if code != ERROR_MORE_DATA || needed as usize <= processes.len() {
+            return Err(io::Error::from_raw_os_error(code as i32));
+        }
+        processes.resize(needed as usize, RM_PROCESS_INFO::default());
+    }
+    Err(io::Error::from_raw_os_error(ERROR_MORE_DATA as i32))
 }
 
 struct Apartment;
@@ -272,7 +396,8 @@ fn shell_target() -> Result<Option<PathBuf>> {
 }
 
 pub fn register_shell(folder: &Path) -> Result<()> {
-    if shell_target()?.is_some_and(|target| target.as_os_str().is_empty() || can_update_target(&target))
+    if shell_target()?
+        .is_some_and(|target| target.as_os_str().is_empty() || can_update_target(&target))
     {
         let worker = folder.join("magic_converter-cli.exe");
         if worker.is_file()

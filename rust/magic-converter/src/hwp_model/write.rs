@@ -142,6 +142,134 @@ fn dimension(element: ElementRef<'_>, name: &str, default: f64) -> f64 {
         .unwrap_or(default)
 }
 
+fn cell_margins(item: Option<ElementRef<'_>>) -> [i32; 4] {
+    item.and_then(|cell| cell.attr("data-margins"))
+        .map_or([141, 283, 141, 283], |value| {
+            numbers(Some(value), [0; 4]).map(|value| value.clamp(0, 100_000) * 5)
+        })
+}
+
+// HWPX stores a concrete cell height. For auto and minimum Word rows,
+// reserve space for wrapped paragraphs before centering content in the cell.
+fn word_cell_height(cell: ElementRef<'_>, width: i32) -> i32 {
+    use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory};
+
+    let [top, left, bottom, right] = cell_margins(Some(cell));
+    let available = (width - left - right).max(100);
+    let mut total = top + bottom;
+    for paragraph in cell
+        .child_elements()
+        .filter(|item| item.value().name() == "p")
+    {
+        let [before, after, spacing] =
+            numbers(paragraph.attr("data-space"), [0; 3]).map(|value| value.clamp(0, 100_000));
+        let [left, right, first] = numbers(paragraph.attr("data-indent"), [0; 3])
+            .map(|value| value.clamp(-100_000, 100_000) * 5);
+        let width = (available - left - right).max(100);
+        let mut remaining = (width - first).max(100);
+        let mut font_height = 0;
+        let mut used = false;
+        let line_height = |size: i32| match (spacing, paragraph.attr("data-rule")) {
+            (0, _) => size * 8 / 5,
+            (_, Some("exact" | "atLeast")) => size.max(spacing * 5),
+            _ => (size * spacing.min(2_400) / 240).max(size * 6 / 5),
+        };
+        let mut new_line = |size: i32| {
+            total = total.saturating_add(line_height(if size == 0 { 1000 } else { size }));
+        };
+        for child in paragraph.descendants().skip(1) {
+            if let Some(element) = ElementRef::wrap(child) {
+                if element.value().name() == "br" {
+                    new_line(font_height);
+                    remaining = width;
+                    font_height = 0;
+                    used = false;
+                } else if element.value().name() == "img" {
+                    let height = (dimension(element, "data-height", 10.0) * 100.0)
+                        .clamp(100.0, 500_000.0) as i32;
+                    font_height = font_height.max(height);
+                    used = true;
+                }
+                continue;
+            }
+            let HtmlNode::Text(text) = child.value() else {
+                continue;
+            };
+            let style = child
+                .ancestors()
+                .filter_map(ElementRef::wrap)
+                .find(|item| item.attr("data-size").is_some())
+                .map_or_else(RunStyle::default, |item| RunStyle::default().with(item));
+            let advance = |ch: char| {
+                let percent = match ch {
+                    '\t' => 200,
+                    ch if ch.is_whitespace() => 34,
+                    ch if ch.general_category_group() == GeneralCategoryGroup::Mark => 0,
+                    '\u{1100}'..='\u{11ff}'
+                    | '\u{2e80}'..='\u{d7ff}'
+                    | '\u{f900}'..='\u{faff}'
+                    | '\u{ff00}'..='\u{ffef}'
+                    | '\u{1f300}'..='\u{1ffff}' => 100,
+                    'i' | 'l' | 'I' | '!' | '|' | '.' | ',' => 32,
+                    ch if ch.is_ascii_uppercase() => 75,
+                    _ => 62,
+                };
+                (style.size * (percent * style.scale / 100 + style.tracking).max(0)) / 100
+            };
+            for token in text.text.split_inclusive(char::is_whitespace) {
+                let body = token.strip_suffix('\n').unwrap_or(token);
+                let word = body.trim_end();
+                let word_width = word.chars().map(advance).fold(0_i32, i32::saturating_add);
+                if used && word.is_ascii() && word_width <= width && word_width > remaining {
+                    new_line(font_height);
+                    remaining = width;
+                    font_height = 0;
+                    used = false;
+                }
+                for ch in body.chars() {
+                    let advance = advance(ch);
+                    if used && !ch.is_whitespace() && advance > remaining {
+                        new_line(font_height);
+                        remaining = width;
+                        font_height = 0;
+                    }
+                    remaining = remaining.saturating_sub(advance);
+                    font_height = font_height.max(style.size);
+                    used = true;
+                }
+                if token.ends_with('\n') {
+                    new_line(font_height.max(style.size));
+                    remaining = width;
+                    font_height = 0;
+                    used = false;
+                }
+            }
+        }
+        new_line(font_height);
+        total = total.saturating_add((before + after) * 5);
+    }
+    total.max(top + bottom + 1000)
+}
+
+#[cfg(test)]
+mod row_height_tests {
+    use super::*;
+
+    #[test]
+    fn centered_word_cell_reserves_space_for_font_wrap_and_insets() {
+        let html = scraper::Html::parse_fragment(
+            r#"<table><tr><td data-margins="20 0 20 0"><p data-space="0 0 240"><span data-size="18">한글<br>두 번째 줄</span></p></td></tr></table>"#,
+        );
+        let cell = html
+            .select(&scraper::Selector::parse("td").unwrap())
+            .next()
+            .unwrap();
+        let wide = word_cell_height(cell, 20_000);
+        assert!(wide >= 3_800);
+        assert!(word_cell_height(cell, 4_000) > wide);
+    }
+}
+
 fn table_size(output: &mut String, width: i32, height: i32) {
     write!(output, r#"<hp:sz width="{width}" widthRelTo="ABSOLUTE" height="{height}" heightRelTo="ABSOLUTE" protect="0"/>"#).unwrap();
 }
@@ -755,17 +883,53 @@ impl Writer<'_> {
         widths.iter_mut().for_each(|width| {
             *width = (f64::from(*width) * scale).round_ties_even().max(1.0) as i32
         });
-        let heights: Vec<_> = grid
+        let word_table = table.attr("data-word-table") == Some("1");
+        let mut heights: Vec<_> = grid
             .heights
             .iter()
             .map(|height| {
                 if *height > 0 {
                     (*height).min(100_000) * 5
+                } else if word_table {
+                    1000
                 } else {
                     1800
                 }
             })
             .collect();
+        if word_table {
+            for (&(row, _), &(item, _, _)) in &grid.cells {
+                if grid.exact_heights[row] {
+                    let padding = cell_margins(item)[2];
+                    heights[row] = heights[row].max(grid.heights[row].min(100_000) * 5 + padding);
+                }
+            }
+            // Size single-row cells first, then distribute any extra height
+            // required by a vertically merged cell over its expandable rows.
+            for merged in [false, true] {
+                for (&(row, col), &(item, rows, columns)) in &grid.cells {
+                    let Some(cell) = item.filter(|_| (rows > 1) == merged) else {
+                        continue;
+                    };
+                    (self.check)()?;
+                    let expandable = (row..row + rows).filter(|&r| !grid.exact_heights[r]);
+                    let count = expandable.clone().count() as i32;
+                    if count == 0 {
+                        continue;
+                    }
+                    let width = widths[col..col + columns].iter().sum();
+                    let needed = word_cell_height(cell, width);
+                    let height = heights[row..row + rows]
+                        .iter()
+                        .copied()
+                        .fold(0_i32, i32::saturating_add);
+                    let delta = (needed - height).max(0);
+                    for (i, r) in expandable.enumerate() {
+                        heights[r] += delta / count + i32::from((i as i32) < delta % count);
+                    }
+                }
+            }
+        }
         let sum_heights = |range: std::ops::Range<usize>| {
             heights[range]
                 .iter()
@@ -810,9 +974,7 @@ impl Writer<'_> {
                     })
                     .unwrap_or(3);
                 let explicit = item.and_then(|cell| cell.attr("data-margins"));
-                let [top, left, bottom, right] = explicit.map_or([141, 283, 141, 283], |value| {
-                    numbers(Some(value), [0; 4]).map(|value| value.clamp(0, 100_000) * 5)
-                });
+                let [top, left, bottom, right] = cell_margins(item);
                 let alignment = match item.and_then(|cell| cell.attr("data-valign")) {
                     Some("top") => "TOP",
                     Some("bottom") => "BOTTOM",

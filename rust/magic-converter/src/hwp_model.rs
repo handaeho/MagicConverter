@@ -84,6 +84,7 @@ pub(crate) struct Grid<'a> {
     pub rows: usize,
     pub columns: usize,
     pub heights: Vec<i32>,
+    pub exact_heights: Vec<bool>,
     pub cells: std::collections::BTreeMap<(usize, usize), (Option<ElementRef<'a>>, usize, usize)>,
 }
 
@@ -107,6 +108,10 @@ impl<'a> Grid<'a> {
             heights: rows
                 .iter()
                 .map(|row| numbers(row.attr("data-height"), [0])[0])
+                .collect(),
+            exact_heights: rows
+                .iter()
+                .map(|row| row.attr("data-word-exact") == Some("1"))
                 .collect(),
             cells: Default::default(),
         };

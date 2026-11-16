@@ -30,6 +30,23 @@ pub(crate) enum DesktopEvent {
     Open(Vec<PathBuf>),
     Feedback(String),
     Status(Value),
+    Progress(u64, JobProgress),
+    ProgressFinished(u64, ProgressOutcome),
+}
+
+pub(crate) struct JobProgress {
+    pub(crate) label: String,
+    pub(crate) file: String,
+    pub(crate) finished: usize,
+    pub(crate) total: usize,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ProgressOutcome {
+    Done,
+    Warning,
+    Failed,
+    Cancelled,
 }
 
 pub(crate) struct DesktopHost {
@@ -306,6 +323,7 @@ impl<'a> Service<'a> {
             if let Err(error) = recorded {
                 self.errors.lock().unwrap().push(json!(error.to_string()));
             }
+            guard.finish(&job);
             self.jobs.lock().unwrap().push(job);
         }
     }
@@ -410,7 +428,7 @@ pub(crate) fn serve_with(
         directory: &directory,
         timeout: input.timeout,
         ids: AtomicU64::new(1),
-        active: Arc::new(ActiveJobs::default()),
+        active: Arc::new(ActiveJobs::with_desktop(desktop)),
         jobs: Mutex::new(Vec::new()),
         errors: Mutex::new(Vec::new()),
         queue,

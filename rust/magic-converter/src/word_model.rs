@@ -347,7 +347,7 @@ impl<'a, 'input> Styles<'a, 'input> {
         styles
     }
 
-    fn chain(&self, selected: Option<&str>, kind: &str) -> Vec<Node<'a, 'input>> {
+    fn chain(&self, selected: Option<&str>, kind: &str, properties: &str) -> Vec<Node<'a, 'input>> {
         let mut current = selected.or_else(|| self.defaults.get(kind).copied());
         let mut seen = HashSet::new();
         let mut layers = Vec::new();
@@ -356,7 +356,7 @@ impl<'a, 'input> Styles<'a, 'input> {
             && seen.len() < 64
             && seen.insert(id)
         {
-            layers.extend(node(*style, "rPr"));
+            layers.extend(node(*style, properties));
             current = val(node(*style, "basedOn"));
         }
         layers
@@ -541,8 +541,8 @@ impl Renderer<'_, '_, '_> {
         let paragraph = run.ancestors().find(|node| node.has_tag_name((WORD, "p")));
         let char_style = val(properties.and_then(|props| node(props, "rStyle")));
         let para_style = val(paragraph.and_then(|para| path(para, &["pPr", "pStyle"])));
-        let char_styles = self.styles.chain(char_style, "character");
-        let para_styles = self.styles.chain(para_style, "paragraph");
+        let char_styles = self.styles.chain(char_style, "character", "rPr");
+        let para_styles = self.styles.chain(para_style, "paragraph", "rPr");
         let prop = |name| {
             properties.and_then(|props| node(props, name)).or_else(|| {
                 char_styles
@@ -625,10 +625,12 @@ impl Renderer<'_, '_, '_> {
             };
             let spacing = metric("spacing", 0);
             let scale = metric("w", 100);
+            let font_space = run.ancestors().any(|item| item.has_tag_name((WORD, "tc")));
             format!(
-                r#" data-font="{font}" data-size="{size}" data-bold="{}" data-italic="{}" data-color="{color}" data-tracking="{spacing}" data-scale="{scale}""#,
+                r#" data-font="{font}" data-size="{size}" data-bold="{}" data-italic="{}" data-color="{color}" data-tracking="{spacing}" data-scale="{scale}" data-font-space="{}""#,
                 u8::from(bold),
-                u8::from(italic)
+                u8::from(italic),
+                u8::from(font_space)
             )
         } else {
             String::new()
@@ -675,7 +677,13 @@ impl Renderer<'_, '_, '_> {
 
     fn paragraph(&mut self, paragraph: Node<'_, '_>, available: f64) -> io::Result<Block> {
         let mut block = Block::default();
-        let alignment = val(path(paragraph, &["pPr", "jc"])).unwrap_or("left");
+        let pr = node(paragraph, "pPr");
+        let paragraph_style = val(pr.and_then(|props| node(props, "pStyle")));
+        let styles = self.styles.chain(paragraph_style, "paragraph", "pPr");
+        let properties = || pr.into_iter().chain(styles.iter().copied());
+        let alignment = properties()
+            .find_map(|properties| val(node(properties, "jc")))
+            .unwrap_or("left");
         let alignment = match alignment {
             "center" | "right" => alignment,
             "both" => "justify",
@@ -683,21 +691,9 @@ impl Renderer<'_, '_, '_> {
         };
         if self.html {
             let layout = if self.layout {
-                let pr = node(paragraph, "pPr");
-                let mut properties: Vec<_> = pr.into_iter().collect();
-                let mut style = val(pr.and_then(|props| node(props, "pStyle")))
-                    .or_else(|| self.styles.defaults.get("paragraph").copied());
-                for _ in 0..64 {
-                    let Some(item) = style.and_then(|id| self.styles.entries.get(id)) else {
-                        break;
-                    };
-                    properties.extend(node(*item, "pPr"));
-                    style = val(node(*item, "basedOn"));
-                }
                 let property = |name, key| {
-                    properties
-                        .iter()
-                        .filter_map(|props| node(*props, name))
+                    properties()
+                        .filter_map(|props| node(props, name))
                         .find_map(|item| attr(item, key))
                 };
                 let number = |name, key| {
@@ -783,6 +779,7 @@ impl Renderer<'_, '_, '_> {
             .collect();
         let table_properties = node(table, "tblPr");
         let mut table_styles = Vec::new();
+        let mut inherited_alignment = None;
         table_styles.extend(table_properties);
         let mut style = val(table_properties.and_then(|props| node(props, "tblStyle")))
             .or_else(|| self.styles.defaults.get("table").copied());
@@ -791,6 +788,17 @@ impl Renderer<'_, '_, '_> {
                 break;
             };
             table_styles.extend(node(*entry, "tblPr"));
+            inherited_alignment = inherited_alignment
+                .or_else(|| {
+                    entry
+                        .children()
+                        .find(|item| {
+                            item.has_tag_name((WORD, "tblStylePr"))
+                                && attr(*item, "type") == Some("wholeTable")
+                        })
+                        .and_then(|item| val(path(item, &["tcPr", "vAlign"])))
+                })
+                .or_else(|| val(path(*entry, &["tcPr", "vAlign"])));
             style = val(node(*entry, "basedOn"));
         }
         let table_property = |key| table_styles.iter().find_map(|item| node(*item, key));
@@ -806,7 +814,7 @@ impl Renderer<'_, '_, '_> {
                 let align = val(table_properties.and_then(|props| node(props, "jc")))
                     .filter(|align| matches!(*align, "left" | "center" | "right"));
                 let align = align.map_or_else(String::new, |align| format!(r#" align="{align}""#));
-                format!(r#" data-columns="{widths}"{align}"#)
+                format!(r#" data-columns="{widths}" data-word-table="1"{align}"#)
             } else {
                 String::new()
             };
@@ -821,14 +829,20 @@ impl Renderer<'_, '_, '_> {
             }
             if self.html {
                 if self.layout {
-                    let height = path(row, &["trPr", "trHeight"])
+                    let height_property = path(row, &["trPr", "trHeight"]);
+                    let rule = height_property
+                        .and_then(|item| attr(item, "hRule"))
+                        .unwrap_or("atLeast");
+                    let height = height_property
+                        .filter(|_| rule != "auto")
                         .and_then(|item| attr(item, "val"))
                         .and_then(|value| value.parse::<i32>().ok())
                         .filter(|height| *height > 0)
-                        .unwrap_or(240);
-                    result
-                        .html
-                        .push_str(&format!(r#"<tr data-height="{height}">"#));
+                        .unwrap_or_default();
+                    let exact = u8::from(rule == "exact" && height > 0);
+                    result.html.push_str(&format!(
+                        r#"<tr data-height="{height}" data-word-exact="{exact}">"#
+                    ));
                 } else {
                     result.html.push_str("<tr>");
                 }
@@ -876,6 +890,7 @@ impl Renderer<'_, '_, '_> {
                         let local_border = props.and_then(|item| node(item, "tcBorders"));
                         let local_margin = props.and_then(|item| node(item, "tcMar"));
                         let vertical = val(props.and_then(|item| node(item, "vAlign")))
+                            .or(inherited_alignment)
                             .filter(|value| matches!(*value, "center" | "bottom"))
                             .unwrap_or("top");
                         let mut values = String::new();

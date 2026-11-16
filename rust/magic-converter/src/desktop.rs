@@ -1,6 +1,7 @@
 mod form;
 mod ole;
 mod presets;
+mod progress;
 mod quick;
 mod settings;
 pub mod shell;
@@ -68,6 +69,7 @@ struct Ui {
     wheel_profiles: [Vec<String>; 2],
     main: HWND,
     wheel: wheel::Wheel,
+    progress: progress::Panel,
     events: Receiver<DesktopEvent>,
     sender: Sender<DesktopEvent>,
     submissions: SyncSender<Submission>,
@@ -783,6 +785,8 @@ impl Ui {
                 DesktopEvent::Settings => self.show(),
                 DesktopEvent::Open(paths) => self.set_inputs(paths),
                 DesktopEvent::Feedback(message) => text(control(self.main, STATUS), &message),
+                DesktopEvent::Progress(id, progress) => self.progress.update(id, progress),
+                DesktopEvent::ProgressFinished(id, outcome) => self.progress.finish(id, outcome),
                 DesktopEvent::Status(status) => {
                     self.status_inflight = false;
                     let count = status["jobs"].as_array().map_or(0, Vec::len);
@@ -827,6 +831,7 @@ impl Ui {
                 let _ = sender.send(DesktopEvent::Status(result));
             });
         }
+        self.progress.tick();
         wheel::poll(self);
     }
 }
@@ -956,6 +961,7 @@ pub fn run(
         wheel_profiles: Default::default(),
         main: null_mut(),
         wheel: wheel::Wheel::default(),
+        progress: progress::Panel::default(),
         events: receiver,
         sender: sender.clone(),
         submissions,
@@ -992,6 +998,7 @@ pub fn run(
     gui.update_settings();
     let wheel_window = wheel::window(state, instance)?;
     gui.wheel.window = wheel_window;
+    gui.progress.window = progress::window(state, instance);
     drop(gui);
     let _main_drop = ole::Registration::new(state, window, false)?;
     let _wheel_drop = ole::Registration::new(state, wheel_window, true)?;
@@ -1034,6 +1041,7 @@ pub fn run(
     drop(_wheel_drop);
     drop(_main_drop);
     unsafe {
+        DestroyWindow(ui.borrow().progress.window);
         DestroyWindow(wheel_window);
         DestroyWindow(window);
     }

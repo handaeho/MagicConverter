@@ -24,12 +24,28 @@ struct Active {
     action: String,
     files: Vec<(String, &'static str)>,
     cancelled: Arc<AtomicBool>,
+    #[cfg(windows)]
+    label: String,
+    #[cfg(windows)]
+    showing_progress: bool,
 }
 
 #[derive(Default)]
-struct ActiveJobs(Mutex<BTreeMap<u64, Active>>);
+struct ActiveJobs {
+    jobs: Mutex<BTreeMap<u64, Active>>,
+    #[cfg(windows)]
+    events: Option<std::sync::mpsc::Sender<ipc::DesktopEvent>>,
+}
 
 impl ActiveJobs {
+    #[cfg(windows)]
+    fn with_desktop(desktop: Option<&ipc::DesktopHost>) -> Self {
+        Self {
+            events: desktop.map(|host| host.events.clone()),
+            ..Self::default()
+        }
+    }
+
     fn register(
         self: &Arc<Self>,
         id: u64,
@@ -49,12 +65,16 @@ impl ActiveJobs {
                 )
             })
             .collect();
-        self.0.lock().unwrap().insert(
+        self.jobs.lock().unwrap().insert(
             id,
             Active {
                 action: plan.selection.action.key.clone(),
                 files,
                 cancelled,
+                #[cfg(windows)]
+                label: plan.selection.name.clone(),
+                #[cfg(windows)]
+                showing_progress: false,
             },
         );
         JobGuard {
@@ -65,7 +85,7 @@ impl ActiveJobs {
 
     #[cfg(windows)]
     fn snapshots(&self) -> Vec<Value> {
-        self.0.lock().unwrap().iter().take(100).map(|(&id, job)| {
+        self.jobs.lock().unwrap().iter().take(100).map(|(&id, job)| {
             let files: Vec<_> = job.files.iter().take(64).map(|(name, state)| json!({"name": name, "state": state})).collect();
             json!({"job_id": id, "action": job.action, "total": job.files.len(), "files": files})
         }).collect()
@@ -73,7 +93,7 @@ impl ActiveJobs {
 
     #[cfg(windows)]
     fn cancel(&self, id: u64) -> bool {
-        self.0.lock().unwrap().get(&id).is_some_and(|job| {
+        self.jobs.lock().unwrap().get(&id).is_some_and(|job| {
             job.cancelled.store(true, Ordering::Relaxed);
             true
         })
@@ -81,7 +101,7 @@ impl ActiveJobs {
 
     #[cfg(windows)]
     fn cancel_all(&self) {
-        for job in self.0.lock().unwrap().values() {
+        for job in self.jobs.lock().unwrap().values() {
             job.cancelled.store(true, Ordering::Relaxed);
         }
     }
@@ -94,15 +114,66 @@ struct JobGuard {
 
 impl JobGuard {
     fn update(&self, index: usize, state: &'static str) {
-        if let Some(job) = self.jobs.0.lock().unwrap().get_mut(&self.id) {
+        if let Some(job) = self.jobs.jobs.lock().unwrap().get_mut(&self.id) {
             job.files[index].1 = state;
+            #[cfg(windows)]
+            if let Some(events) = &self.jobs.events {
+                job.showing_progress = true;
+                let finished = job
+                    .files
+                    .iter()
+                    .filter(|(_, state)| !matches!(*state, "queued" | "running"))
+                    .count();
+                let _ = events.send(ipc::DesktopEvent::Progress(
+                    self.id,
+                    ipc::JobProgress {
+                        label: job.label.clone(),
+                        file: job.files[index].0.clone(),
+                        finished,
+                        total: job.files.len(),
+                    },
+                ));
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    fn finish(&self, result: &Value) {
+        use ipc::ProgressOutcome;
+        let outcome = if result["cancelled"] == true {
+            ProgressOutcome::Cancelled
+        } else if result["completed"] != result["total"] {
+            ProgressOutcome::Failed
+        } else if result["warnings"]
+            .as_array()
+            .is_some_and(|warnings| !warnings.is_empty())
+        {
+            ProgressOutcome::Warning
+        } else {
+            ProgressOutcome::Done
+        };
+        let mut jobs = self.jobs.jobs.lock().unwrap();
+        if let Some(job) = jobs.get_mut(&self.id)
+            && let Some(events) = &self.jobs.events
+        {
+            job.showing_progress = false;
+            let _ = events.send(ipc::DesktopEvent::ProgressFinished(self.id, outcome));
         }
     }
 }
 
 impl Drop for JobGuard {
     fn drop(&mut self) {
-        self.jobs.0.lock().unwrap().remove(&self.id);
+        let _job = self.jobs.jobs.lock().unwrap().remove(&self.id);
+        #[cfg(windows)]
+        if _job.is_some_and(|job| job.showing_progress)
+            && let Some(events) = &self.jobs.events
+        {
+            let _ = events.send(ipc::DesktopEvent::ProgressFinished(
+                self.id,
+                ipc::ProgressOutcome::Failed,
+            ));
+        }
     }
 }
 
