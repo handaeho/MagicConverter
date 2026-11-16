@@ -6,7 +6,7 @@
 
 ## EXE로 시작하기
 
-[3.0 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v3.0.0/MagicConverter-3.0.0-Windows-x64.zip)의 압축을 풀고 `magic_converter-setup.exe`를 실행합니다. <br>
+[3.0 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v3.0.1/MagicConverter-3.0.1-Windows-x64.zip)의 압축을 풀고 `magic_converter-setup.exe`를 실행합니다. <br>
 제거할 때는 같은 ZIP의 `magic_converter-uninstall.exe`를 사용합니다.
 
 Windows 10·11 x64용 Rust 앱입니다. <br>

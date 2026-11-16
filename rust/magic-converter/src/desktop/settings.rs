@@ -2,6 +2,7 @@ use super::*;
 use crate::OutputRule;
 use std::collections::HashSet;
 use std::path::Path;
+use windows_sys::Win32::System::SystemServices::SS_CENTERIMAGE;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::EnableWindow;
 
 const INTERVAL: u16 = 301;
@@ -16,10 +17,20 @@ const IMPORT: u16 = 309;
 const RESTORE: u16 = 310;
 const RESET: u16 = 311;
 const DESTINATION: u16 = 312;
+const BROWSE_FOLDER: u16 = 313;
+const USE_SOURCE: u16 = 314;
+const USE_AUTO: u16 = 315;
 const INTEGER_FIELDS: [(u16, &str, u64, u64); 3] = [
     (INTERVAL, "interval_ms", 30, 50),
     (THRESHOLD, "threshold", 5, 80),
     (HISTORY_LIMIT, "history_limit", 0, 1000),
+];
+const NAME_STYLES: [(&str, &str); 5] = [
+    ("{stem}_{tag}", "원본 이름_변환 종류"),
+    ("{stem}", "원본 이름 그대로"),
+    ("{stem}-{tag}", "원본 이름-변환 종류"),
+    ("{tag}_{stem}", "변환 종류_원본 이름"),
+    ("{stem}_{preset}", "원본 이름_프리셋 이름"),
 ];
 
 struct Editor<'a> {
@@ -68,6 +79,63 @@ fn file_dialog(window: HWND, save: bool, executable: bool) -> Option<PathBuf> {
     };
     let end = buffer.iter().position(|&ch| ch == 0)?;
     (result != 0).then(|| PathBuf::from(OsString::from_wide(&buffer[..end])))
+}
+
+fn folder_dialog(window: HWND) -> Option<PathBuf> {
+    use windows::Win32::Foundation::HWND as ComWindow;
+    use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree};
+    use windows::Win32::UI::Shell::{
+        FOS_FORCEFILESYSTEM, FOS_PICKFOLDERS, FileOpenDialog, IFileOpenDialog, SIGDN_FILESYSPATH,
+    };
+    use windows::core::w;
+
+    unsafe {
+        let dialog: IFileOpenDialog =
+            CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).ok()?;
+        dialog
+            .SetOptions(dialog.GetOptions().ok()? | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM)
+            .ok()?;
+        dialog.SetTitle(w!("결과를 저장할 폴더 고르기")).ok()?;
+        dialog.Show(Some(ComWindow(window))).ok()?;
+        let path = dialog
+            .GetResult()
+            .ok()?
+            .GetDisplayName(SIGDN_FILESYSPATH)
+            .ok()?;
+        let result = PathBuf::from(OsString::from_wide(path.as_wide()));
+        CoTaskMemFree(Some(path.0.cast()));
+        Some(result)
+    }
+}
+
+fn add_choice(window: HWND, label: &str) {
+    unsafe { SendMessageW(window, CB_ADDSTRING, 0, wide(label).as_ptr() as isize) };
+}
+
+fn select_choice(window: HWND, index: usize) {
+    unsafe { SendMessageW(window, CB_SETCURSEL, index, 0) };
+}
+
+fn choice(window: HWND) -> usize {
+    unsafe { SendMessageW(window, CB_GETCURSEL, 0, 0) as usize }
+}
+
+fn populate_choices(window: HWND) {
+    for (id, _, min, max) in INTEGER_FIELDS {
+        let combo = control(window, id);
+        for value in min..=max {
+            let label = match id {
+                INTERVAL => format!("{value} ms"),
+                THRESHOLD => format!("{value} px"),
+                _ if value == 0 => "보관 안 함".to_owned(),
+                _ => format!("{value}개"),
+            };
+            add_choice(combo, &label);
+        }
+    }
+    for label in ["번호를 붙여 저장", "저장하지 않고 오류 표시"] {
+        add_choice(control(window, COLLISION), label);
+    }
 }
 
 fn normalize(catalog: &Catalog, imported: Value) -> automation::Result<Value> {
@@ -127,43 +195,60 @@ fn normalize(catalog: &Catalog, imported: Value) -> automation::Result<Value> {
 
 impl Editor<'_> {
     fn display(&self, window: HWND) {
-        for (id, key, _, _) in INTEGER_FIELDS {
-            text(control(window, id), &self.draft[key].to_string());
+        for (id, key, min, max) in INTEGER_FIELDS {
+            let current = self.draft[key].as_u64().unwrap_or(min).clamp(min, max);
+            select_choice(control(window, id), (current - min) as usize);
         }
-        for (id, value) in [
-            (FFMPEG, &self.draft["ffmpeg_path"]),
-            (TEMPLATE, &self.draft["output"]["template"]),
-            (DESTINATION, &self.draft["output"]["directory"]),
+        self.display_paths(window);
+        let template = control(window, TEMPLATE);
+        unsafe { SendMessageW(template, CB_RESETCONTENT, 0, 0) };
+        for (_, label) in NAME_STYLES {
+            add_choice(template, label);
+        }
+        let current = self.draft["output"]["template"]
+            .as_str()
+            .unwrap_or_default();
+        let selected = NAME_STYLES.iter().position(|(style, _)| *style == current);
+        if selected.is_none() {
+            add_choice(template, "기존 사용자 지정 이름 유지");
+        }
+        select_choice(template, selected.unwrap_or(NAME_STYLES.len()));
+        select_choice(
+            control(window, COLLISION),
+            usize::from(self.draft["output"]["collision"] == "error"),
+        );
+    }
+
+    fn display_paths(&self, window: HWND) {
+        for (id, value, fallback) in [
+            (FFMPEG, &self.draft["ffmpeg_path"], "자동 찾기"),
+            (
+                DESTINATION,
+                &self.draft["output"]["directory"],
+                "원본 파일의 폴더",
+            ),
         ] {
-            text(control(window, id), value.as_str().unwrap_or_default());
+            let path = value.as_str().filter(|path| !path.is_empty());
+            text(control(window, id), path.unwrap_or(fallback));
         }
-        unsafe {
-            SendMessageW(
-                control(window, COLLISION),
-                CB_SETCURSEL,
-                usize::from(self.draft["output"]["collision"] == "error"),
-                0,
-            )
-        };
     }
 
     fn read(&self, window: HWND) -> automation::Result<Value> {
         let mut draft = self.draft.clone();
-        for (id, key, _, _) in INTEGER_FIELDS {
-            draft[key] = json!(read_text(control(window, id)).trim().parse::<u64>()?);
+        for (id, key, min, max) in INTEGER_FIELDS {
+            let index = choice(control(window, id)) as u64;
+            if index <= max - min {
+                draft[key] = json!(min + index);
+            }
         }
-        draft["ffmpeg_path"] = json!(read_text(control(window, FFMPEG)).trim());
-        draft["output"]["template"] = json!(read_text(control(window, TEMPLATE)));
-        let directory = read_text(control(window, DESTINATION));
-        let directory = directory.trim();
-        draft["output"]["directory"] = json!(directory);
-        draft["output"]["location"] = json!(if directory.is_empty() {
-            "source"
+        if let Some((template, _)) = NAME_STYLES.get(choice(control(window, TEMPLATE))) {
+            draft["output"]["template"] = json!(template);
+        }
+        draft["output"]["collision"] = json!(if choice(control(window, COLLISION)) == 1 {
+            "error"
         } else {
-            "folder"
+            "rename"
         });
-        let collision = unsafe { SendMessageW(control(window, COLLISION), CB_GETCURSEL, 0, 0) };
-        draft["output"]["collision"] = json!(if collision == 1 { "error" } else { "rename" });
         normalize(self.catalog, draft)
     }
 
@@ -184,8 +269,25 @@ impl Editor<'_> {
             _ => match id {
                 BROWSE => {
                     if let Some(path) = file_dialog(window, false, true) {
-                        text(control(window, FFMPEG), &path.to_string_lossy());
+                        self.draft["ffmpeg_path"] = json!(path.to_string_lossy());
+                        self.display_paths(window);
                     }
+                }
+                USE_AUTO => {
+                    self.draft["ffmpeg_path"] = json!("");
+                    self.display_paths(window);
+                }
+                BROWSE_FOLDER => {
+                    if let Some(path) = folder_dialog(window) {
+                        self.draft["output"]["directory"] = json!(path.to_string_lossy());
+                        self.draft["output"]["location"] = json!("folder");
+                        self.display_paths(window);
+                    }
+                }
+                USE_SOURCE => {
+                    self.draft["output"]["directory"] = json!("");
+                    self.draft["output"]["location"] = json!("source");
+                    self.display_paths(window);
                 }
                 EXPORT => {
                     let draft = self.read(window)?;
@@ -220,6 +322,9 @@ unsafe extern "system" fn window_proc(
     wp: WPARAM,
     lp: LPARAM,
 ) -> LRESULT {
+    if let Some(result) = form::message(window, message, wp, lp) {
+        return result;
+    }
     if message == WM_NCCREATE {
         let params = unsafe { &*(lp as *const CREATESTRUCTW) };
         unsafe { SetWindowLongPtrW(window, GWLP_USERDATA, params.lpCreateParams as isize) };
@@ -252,6 +357,41 @@ unsafe extern "system" fn window_proc(
     unsafe { DefWindowProcW(window, message, wp, lp) }
 }
 
+fn advanced_help(id: u16, label: &str) -> &'static str {
+    match (id, label) {
+        (INTERVAL, _) | (0, "드래그 확인 간격") => {
+            "드래그 중인지를 확인하는 시간 간격. 숫자가 작을수록 더 자주 확인"
+        }
+        (THRESHOLD, _) | (0, "휠 표시 거리") => {
+            "왼쪽 버튼을 누른 뒤 변환 휠이 나타나기까지 마우스를 움직일 최소 거리"
+        }
+        (FFMPEG, _) | (0, "FFmpeg") => {
+            "동영상과 오디오 변환에 사용할 FFmpeg. 자동 찾기는 내장 도구 우선 사용"
+        }
+        (BROWSE, _) => "별도로 설치한 FFmpeg 실행 파일의 선택",
+        (USE_AUTO, _) => "FFmpeg 실행 파일의 자동 찾기",
+        (DESTINATION, _) | (0, "결과 저장 폴더") => "변환한 파일을 저장할 기본 폴더",
+        (BROWSE_FOLDER, _) => "변환 결과를 모아 둘 폴더의 선택",
+        (USE_SOURCE, _) => "각 결과를 원본 파일과 같은 폴더에 저장",
+        (TEMPLATE, _) | (0, "결과 파일 이름") => {
+            "원본 이름, 변환 종류, 프리셋 이름을 사용해 결과 이름을 만드는 방식"
+        }
+        (COLLISION, _) | (0, "같은 이름의 파일") => {
+            "저장할 곳에 같은 이름의 파일이 있을 때 번호를 붙이거나 저장을 중단하는 방식"
+        }
+        (HISTORY_LIMIT, _) | (0, "보관할 결과 기록") => {
+            "최근 변환 결과를 최대 몇 건까지 보관할지 결정. 보관 안 함은 새 기록 미보관"
+        }
+        (IMPORT, _) => "파일에 저장된 설정을 이 창으로 불러오기",
+        (EXPORT, _) => "이 창의 설정을 파일로 저장. 결과 기록 제외",
+        (RESTORE, _) => "직전에 저장한 설정의 백업을 이 창으로 불러오기",
+        (RESET, _) => "이 창의 설정을 처음 설치했을 때의 값으로 되돌리기",
+        (id, _) if id == IDOK as u16 => "변경한 설정의 저장과 적용",
+        (id, _) if id == IDCANCEL as u16 => "이 창에서 바꾼 설정을 적용하지 않고 닫기",
+        _ => "",
+    }
+}
+
 pub(super) fn open(ui: &mut Ui) -> automation::Result<()> {
     let class = wide("MagicConverterAdvancedSettings");
     let instance = unsafe { GetModuleHandleW(null()) };
@@ -259,7 +399,7 @@ pub(super) fn open(ui: &mut Ui) -> automation::Result<()> {
         lpfnWndProc: Some(window_proc),
         hInstance: instance,
         hCursor: unsafe { LoadCursorW(null_mut(), IDC_ARROW) },
-        hbrBackground: (COLOR_BTNFACE + 1) as HBRUSH,
+        hbrBackground: (COLOR_WINDOW + 1) as HBRUSH,
         lpszClassName: class.as_ptr(),
         ..Default::default()
     };
@@ -271,14 +411,16 @@ pub(super) fn open(ui: &mut Ui) -> automation::Result<()> {
         saved: false,
         closed: false,
     });
+    let mut owner_position = RECT::default();
+    unsafe { GetWindowRect(ui.main, &mut owner_position) };
     let window = unsafe {
         CreateWindowExW(
             WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT,
             class.as_ptr(),
             wide("MagicConverter 고급 설정").as_ptr(),
             WS_CAPTION | WS_SYSMENU,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
+            owner_position.left,
+            owner_position.top,
             630,
             392,
             ui.main,
@@ -290,132 +432,56 @@ pub(super) fn open(ui: &mut Ui) -> automation::Result<()> {
     if window.is_null() {
         return Err(io::Error::last_os_error().into());
     }
-    let child = WS_CHILD | WS_VISIBLE;
-    let tab = child | WS_TABSTOP;
-    let edit = tab | WS_BORDER | ES_AUTOHSCROLL as u32;
+    let label = WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE;
+    let tab = WS_CHILD | WS_VISIBLE | WS_TABSTOP;
+    let combo = tab | WS_VSCROLL | CBS_DROPDOWNLIST as u32;
+    let display = WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL as u32 | ES_READONLY as u32;
     let fields = [
-        ("STATIC", "감지 주기 (30~50 ms)", child, 0, 16, 20, 180, 22),
-        ("EDIT", "", edit, INTERVAL, 198, 17, 84, 25),
+        ("STATIC", "드래그 확인 간격", label, 0, 20, 18, 147, 28),
+        ("COMBOBOX", "", combo, INTERVAL, 178, 18, 125, 230),
+        ("STATIC", "휠 표시 거리", label, 0, 337, 18, 128, 28),
+        ("COMBOBOX", "", combo, THRESHOLD, 487, 18, 155, 230),
+        ("STATIC", "FFmpeg", label, 0, 20, 66, 147, 28),
+        ("EDIT", "", display, FFMPEG, 178, 66, 234, 26),
+        ("BUTTON", "파일 고르기…", tab, BROWSE, 422, 64, 112, 30),
+        ("BUTTON", "자동 찾기", tab, USE_AUTO, 542, 64, 100, 30),
+        ("STATIC", "결과 저장 폴더", label, 0, 20, 110, 147, 28),
+        ("EDIT", "", display, DESTINATION, 178, 110, 234, 26),
         (
-            "STATIC",
-            "드래그 거리 (5~80 px)",
-            child,
-            0,
-            310,
-            20,
-            175,
-            22,
+            "BUTTON",
+            "폴더 고르기…",
+            tab,
+            BROWSE_FOLDER,
+            422,
+            108,
+            112,
+            30,
         ),
-        ("EDIT", "", edit, THRESHOLD, 489, 17, 107, 25),
-        (
-            "STATIC",
-            "FFmpeg 경로 (빈칸은 자동)",
-            child,
-            0,
-            16,
-            60,
-            180,
-            22,
-        ),
-        ("EDIT", "", edit, FFMPEG, 198, 57, 300, 25),
-        ("BUTTON", "찾기…", tab, BROWSE, 510, 56, 86, 27),
-        (
-            "STATIC",
-            "출력 폴더 (빈칸은 원본 위치)",
-            child,
-            0,
-            16,
-            100,
-            180,
-            22,
-        ),
-        ("EDIT", "", edit, DESTINATION, 198, 97, 398, 25),
-        ("STATIC", "출력 이름", child, 0, 16, 140, 180, 22),
-        ("EDIT", "", edit, TEMPLATE, 198, 137, 398, 25),
-        (
-            "STATIC",
-            "{stem} 원본 이름 · {tag} 변환 종류 · {preset} 프리셋",
-            child,
-            0,
-            198,
-            167,
-            397,
-            20,
-        ),
-        ("STATIC", "이름 충돌", child, 0, 16, 200, 180, 22),
-        (
-            "COMBOBOX",
-            "",
-            tab | CBS_DROPDOWNLIST as u32,
-            COLLISION,
-            198,
-            197,
-            398,
-            99,
-        ),
-        (
-            "STATIC",
-            "결과 기록 보관 수 (0~1,000)",
-            child,
-            0,
-            16,
-            239,
-            180,
-            22,
-        ),
-        ("EDIT", "", edit, HISTORY_LIMIT, 198, 236, 84, 25),
-        ("BUTTON", "가져오기…", tab, IMPORT, 16, 275, 130, 29),
-        ("BUTTON", "내보내기…", tab, EXPORT, 164, 275, 130, 29),
-        ("BUTTON", "백업 복구", tab, RESTORE, 312, 275, 130, 29),
-        ("BUTTON", "기본값 복원", tab, RESET, 466, 275, 130, 29),
+        ("BUTTON", "원본 폴더", tab, USE_SOURCE, 542, 108, 100, 30),
+        ("STATIC", "결과 파일 이름", label, 0, 20, 154, 147, 28),
+        ("COMBOBOX", "", combo, TEMPLATE, 178, 154, 464, 170),
+        ("STATIC", "같은 이름의 파일", label, 0, 20, 198, 147, 28),
+        ("COMBOBOX", "", combo, COLLISION, 178, 198, 464, 100),
+        ("STATIC", "보관할 결과 기록", label, 0, 20, 242, 147, 28),
+        ("COMBOBOX", "", combo, HISTORY_LIMIT, 178, 242, 154, 230),
+        ("BUTTON", "설정 가져오기…", tab, IMPORT, 20, 297, 145, 32),
+        ("BUTTON", "설정 내보내기…", tab, EXPORT, 181, 297, 145, 32),
+        ("BUTTON", "백업 복구", tab, RESTORE, 342, 297, 145, 32),
+        ("BUTTON", "기본값 복원", tab, RESET, 497, 297, 145, 32),
         (
             "BUTTON",
             "저장",
             tab | BS_DEFPUSHBUTTON as u32,
             IDOK as u16,
-            400,
-            315,
-            94,
-            29,
+            434,
+            350,
+            100,
+            32,
         ),
-        ("BUTTON", "취소", tab, IDCANCEL as u16, 502, 315, 94, 29),
+        ("BUTTON", "취소", tab, IDCANCEL as u16, 542, 350, 100, 32),
     ];
-    for (class, label, style, id, x, y, width, height) in fields {
-        let item = unsafe {
-            CreateWindowExW(
-                0,
-                wide(class).as_ptr(),
-                wide(label).as_ptr(),
-                style,
-                x,
-                y,
-                width,
-                height,
-                window,
-                handle(id),
-                instance,
-                null(),
-            )
-        };
-        unsafe {
-            SendMessageW(
-                item,
-                WM_SETFONT,
-                GetStockObject(DEFAULT_GUI_FONT) as usize,
-                1,
-            )
-        };
-    }
-    for label in ["번호를 붙여 저장", "오류 표시"] {
-        unsafe {
-            SendMessageW(
-                control(window, COLLISION),
-                CB_ADDSTRING,
-                0,
-                wide(label).as_ptr() as isize,
-            )
-        };
-    }
+    form::install(window, (662, 400), &fields, advanced_help);
+    populate_choices(window);
     let editor = state.borrow();
     editor.display(window);
     unsafe {
@@ -458,4 +524,82 @@ pub(super) fn open(ui: &mut Ui) -> automation::Result<()> {
         text(control(ui.main, STATUS), "고급 설정을 저장했습니다.");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_choices_save_and_preserve_an_existing_custom_name() {
+        let catalog = Catalog::load().unwrap();
+        let mut editor = Editor {
+            catalog: &catalog,
+            directory: PathBuf::new(),
+            draft: catalog.default_preferences.clone(),
+            saved: false,
+            closed: false,
+        };
+        editor.draft["output"]["template"] = json!("완료-{stem}-{tag}");
+        editor.draft["output"]["location"] = json!("folder");
+        editor.draft["output"]["directory"] = json!(r"C:\test");
+        let instance = unsafe { GetModuleHandleW(null()) };
+        let window = unsafe {
+            CreateWindowExW(
+                0,
+                wide("STATIC").as_ptr(),
+                null(),
+                WS_OVERLAPPED,
+                0,
+                0,
+                350,
+                250,
+                null_mut(),
+                null_mut(),
+                instance,
+                null(),
+            )
+        };
+        assert!(!window.is_null());
+        for (index, id) in [INTERVAL, THRESHOLD, HISTORY_LIMIT, TEMPLATE, COLLISION]
+            .into_iter()
+            .enumerate()
+        {
+            let item = unsafe {
+                CreateWindowExW(
+                    0,
+                    wide("COMBOBOX").as_ptr(),
+                    null(),
+                    WS_CHILD | CBS_DROPDOWNLIST as u32,
+                    0,
+                    index as i32 * 34,
+                    200,
+                    150,
+                    window,
+                    handle(id),
+                    instance,
+                    null(),
+                )
+            };
+            assert!(!item.is_null());
+        }
+        populate_choices(window);
+        editor.display(window);
+        assert_eq!(
+            editor.read(window).unwrap()["output"]["template"],
+            "완료-{stem}-{tag}"
+        );
+        select_choice(control(window, INTERVAL), 10);
+        select_choice(control(window, HISTORY_LIMIT), 0);
+        select_choice(control(window, TEMPLATE), 1);
+        editor.command(window, USE_SOURCE).unwrap();
+        editor.command(window, IDOK as u16).unwrap();
+        unsafe { DestroyWindow(window) };
+        assert!(editor.saved);
+        assert_eq!(editor.draft["interval_ms"], 40);
+        assert_eq!(editor.draft["history_limit"], 0);
+        assert_eq!(editor.draft["output"]["template"], "{stem}");
+        assert_eq!(editor.draft["output"]["location"], "source");
+        assert_eq!(editor.draft["output"]["directory"], "");
+    }
 }

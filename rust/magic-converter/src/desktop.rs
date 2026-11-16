@@ -1,3 +1,4 @@
+mod form;
 mod ole;
 mod presets;
 mod quick;
@@ -137,8 +138,8 @@ fn controls(window: HWND) {
             595,
             22,
         ),
-        ("STATIC", "파일", normal, 0, 20, 82, 80, 21),
-        ("BUTTON", "파일 선택…", tab, PICK, 496, 74, 114, 27),
+        ("STATIC", "변환할 원본", normal, 0, 20, 82, 125, 21),
+        ("BUTTON", "변환할 파일 고르기…", tab, PICK, 437, 74, 173, 27),
         (
             "LISTBOX",
             "",
@@ -232,25 +233,33 @@ fn controls(window: HWND) {
         ("BUTTON", "고급 설정…", tab, SETTINGS, 382, 425, 108, 29),
         ("BUTTON", "프로그램 종료", tab, QUIT, 497, 425, 113, 29),
     ];
-    let font = unsafe { GetStockObject(DEFAULT_GUI_FONT) };
-    for (class, label, style, id, x, y, width, height) in specs {
-        let child = unsafe {
-            CreateWindowExW(
-                0,
-                wide(class).as_ptr(),
-                wide(label).as_ptr(),
-                style,
-                x,
-                y,
-                width,
-                height,
-                window,
-                handle(id),
-                null_mut(),
-                null(),
-            )
-        };
-        unsafe { SendMessageW(child, WM_SETFONT, font as usize, 1) };
+    form::install(window, (630, 474), &specs, general_help);
+}
+
+fn general_help(id: u16, label: &str) -> &'static str {
+    match (id, label) {
+        (INPUTS | PICK, _) | (0, "변환할 원본") => {
+            "이번 작업에 사용할 원본 파일 목록. 여러 파일 선택 또는 끌어다 놓기 가능"
+        }
+        (ACTION, _) | (0, "작업") => "선택한 원본에 적용할 변환 형식, 도구 또는 프리셋",
+        (OUTPUT, _) | (0, "출력 폴더") => "결과를 저장할 폴더. 빈칸이면 원본 파일의 폴더",
+        (START, _) => "표시된 파일에 선택한 작업 실행",
+        (ENABLED, _) => "파일을 끌면서 Shift 또는 Ctrl을 눌렀을 때 휠 표시 여부",
+        (RELEASE, _) => "휠 안에서 Shift 또는 Ctrl을 먼저 놓았을 때만 작업 실행",
+        (SAVE, _) => "현재 일반 설정을 다음 실행에도 사용할 기본값으로 저장",
+        (CONVERT_PROFILE, _) | (0, "Shift 변환 휠") => {
+            "Shift로 열 변환 목록. 자동은 원본에 가능한 변환 형식 표시"
+        }
+        (ACTION_PROFILE, _) | (0, "Ctrl 액션 휠") => {
+            "Ctrl로 열 도구 목록. 자동은 원본에 사용할 수 있는 빠른 도구 표시"
+        }
+        (PRESETS, _) => "자주 쓰는 작업과 휠에 표시할 항목의 편집",
+        (JOBS, _) => "진행 중이거나 대기 중인 작업의 확인",
+        (HISTORY, _) => "최근 작업 결과와 저장 위치의 확인",
+        (CANCEL, _) => "진행 중이거나 대기 중인 작업의 취소",
+        (SETTINGS, _) => "드래그 감도, 결과 이름, 저장 위치와 기록 보관 수의 설정",
+        (QUIT, _) => "트레이를 포함한 MagicConverter 종료",
+        _ => "",
     }
 }
 
@@ -728,7 +737,7 @@ impl Ui {
         }
         for (id, label) in [
             (SHOW, "실행 상태 / 설정…"),
-            (PICK, "파일 선택…"),
+            (PICK, "변환할 파일 고르기…"),
             (JOBS, "작업 관리…"),
             (HISTORY, "결과 기록…"),
             (HELP, "사용 방법"),
@@ -828,6 +837,9 @@ unsafe extern "system" fn window_proc(
     wp: WPARAM,
     lp: LPARAM,
 ) -> LRESULT {
+    if let Some(result) = form::message(window, message, wp, lp) {
+        return result;
+    }
     if message == WM_NCCREATE {
         let create = unsafe { &*(lp as *const CREATESTRUCTW) };
         unsafe { SetWindowLongPtrW(window, GWLP_USERDATA, create.lpCreateParams as isize) };

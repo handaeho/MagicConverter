@@ -9,9 +9,12 @@ use std::ptr::null_mut;
 use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::Graphics::Gdi::*;
+use windows_sys::Win32::System::Threading::{
+    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+};
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_CONTROL, VK_ESCAPE, VK_LBUTTON, VK_SHIFT,
+    GetAsyncKeyState, VK_CONTROL, VK_ESCAPE, VK_LBUTTON, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
@@ -42,6 +45,7 @@ pub(super) struct Wheel {
     origin: Option<(i32, i32)>,
     dragging: bool,
     consumed: bool,
+    shortcut: ShortcutGuard,
     mode: Option<Mode>,
     visible: bool,
     paths: Vec<PathBuf>,
@@ -58,6 +62,56 @@ pub(super) struct Wheel {
 
 fn down(key: u16) -> bool {
     unsafe { GetAsyncKeyState(i32::from(key)) < 0 }
+}
+
+fn system_modifier_down() -> bool {
+    [VK_LWIN, VK_RWIN, VK_MENU].into_iter().any(down)
+}
+
+#[derive(Default)]
+struct ShortcutGuard {
+    blocked: bool,
+}
+
+impl ShortcutGuard {
+    fn update(&mut self, system: bool, mouse: bool, drag_modifier: bool) -> bool {
+        if system {
+            self.blocked = true;
+        } else if !mouse && !drag_modifier {
+            self.blocked = false;
+        }
+        self.blocked
+    }
+}
+
+fn screen_capture_process(path: &str) -> bool {
+    let name = path.rsplit(['\\', '/']).next().unwrap_or_default();
+    [
+        "ScreenClippingHost.exe",
+        "SnippingTool.exe",
+        "ScreenSketch.exe",
+    ]
+    .iter()
+    .any(|capture| name.eq_ignore_ascii_case(capture))
+}
+
+fn screen_capture_active() -> bool {
+    unsafe {
+        let window = GetForegroundWindow();
+        let mut pid = 0;
+        if window.is_null() || GetWindowThreadProcessId(window, &mut pid) == 0 {
+            return false;
+        }
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            return false;
+        }
+        let mut image = [0_u16; 1024];
+        let mut length = image.len() as u32;
+        let found = QueryFullProcessImageNameW(process, 0, image.as_mut_ptr(), &mut length);
+        CloseHandle(process);
+        found != 0 && screen_capture_process(&String::from_utf16_lossy(&image[..length as usize]))
+    }
 }
 
 impl Wheel {
@@ -136,13 +190,28 @@ impl Wheel {
             self.dragging = false;
             return;
         }
+        let mouse = down(VK_LBUTTON);
+        let mode = modifier_mode(down(VK_SHIFT), down(VK_CONTROL));
+        // Reserve the whole gesture for Windows until its keys and the mouse
+        // button are released, including mouse selection after Win is lifted.
+        if self
+            .shortcut
+            .update(system_modifier_down(), mouse, mode.is_some())
+        {
+            self.hide();
+            self.origin = None;
+            self.mode = None;
+            self.dragging = false;
+            self.consumed = false;
+            return;
+        }
         if self
             .hide_at
             .is_some_and(|deadline| Instant::now() >= deadline)
         {
             self.hide();
         }
-        if !down(VK_LBUTTON) {
+        if !mouse {
             if self.visible && self.hide_at.is_none() {
                 if self.inside {
                     self.hide_at = Some(
@@ -179,7 +248,6 @@ impl Wheel {
         );
         let threshold = profile["threshold"].as_i64().unwrap_or(15).clamp(1, 1000);
         self.dragging |= dx * dx + dy * dy >= threshold * threshold;
-        let mode = modifier_mode(down(VK_SHIFT), down(VK_CONTROL));
         if mode.is_none() {
             if self.mode.is_some() && self.visible {
                 if self.requires_release() && self.inside && !self.paths.is_empty() {
@@ -193,6 +261,12 @@ impl Wheel {
             return;
         }
         if self.dragging && !self.consumed && self.mode != mode {
+            if screen_capture_active() {
+                self.shortcut.update(true, mouse, true);
+                self.hide();
+                self.mode = None;
+                return;
+            }
             self.mode = mode;
             self.released = false;
             if !self.visible {
@@ -313,6 +387,11 @@ pub(super) fn entered(ui: &mut Ui, paths: Vec<PathBuf>, web: Vec<web::Input>) {
 
 pub(super) fn drag(ui: &mut Ui, x: i32, y: i32, modifiers: bool) -> bool {
     let wheel = &mut ui.wheel;
+    if wheel.shortcut.blocked || system_modifier_down() {
+        wheel.shortcut.update(true, true, modifiers);
+        wheel.hide();
+        return false;
+    }
     let hover = wheel.slot_at(x, y);
     if !modifiers
         && wheel.mode.is_some()
@@ -567,6 +646,30 @@ pub(super) fn window(state: *const RefCell<Ui>, instance: HINSTANCE) -> io::Resu
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn system_chord_reserves_mouse_gesture_until_all_buttons_are_up() {
+        let mut shortcut = ShortcutGuard::default();
+        assert!(!shortcut.update(false, true, true));
+        assert!(shortcut.update(true, false, true));
+        assert!(shortcut.update(false, true, true));
+        assert!(shortcut.update(false, true, false));
+        assert!(shortcut.update(false, false, true));
+        assert!(!shortcut.update(false, false, false));
+        assert!(!shortcut.update(false, true, true));
+    }
+
+    #[test]
+    fn recognizes_windows_capture_hosts_by_executable() {
+        assert!(screen_capture_process(
+            r"C:\Windows\System32\ScreenClippingHost.exe"
+        ));
+        assert!(screen_capture_process(r"C:\WindowsApps\SNIPPINGTOOL.EXE"));
+        assert!(screen_capture_process("ScreenSketch.exe"));
+        assert!(!screen_capture_process(
+            r"C:\Program Files\Browser\browser.exe"
+        ));
+    }
 
     #[test]
     fn shift_and_control_select_distinct_profiles_and_gate_release() {
