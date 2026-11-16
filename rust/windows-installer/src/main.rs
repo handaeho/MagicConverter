@@ -175,9 +175,9 @@ fn safe_path(root: &Path, member: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn validate_manifest(manifest: &Manifest) -> Result<()> {
+fn validate_manifest(manifest: &Manifest, version: &str) -> Result<()> {
     if manifest.product != PRODUCT
-        || manifest.version != VERSION
+        || manifest.version != version
         || manifest.files.is_empty()
         || manifest.files.len() > MAX_FILES
     {
@@ -367,7 +367,7 @@ fn package(input: &Path, output: &Path) -> Result<Value> {
         version: VERSION.to_owned(),
         files,
     };
-    validate_manifest(&manifest)?;
+    validate_manifest(&manifest, VERSION)?;
     let output = std::path::absolute(output)?;
     let parent = output
         .parent()
@@ -420,15 +420,19 @@ fn package(input: &Path, output: &Path) -> Result<Value> {
     Ok(json!({"ok": true, "bundle": output, "files": manifest.files.len(), "archive_bytes": size}))
 }
 
-fn marker(folder: &Path) -> Result<Marker> {
+fn read_marker(folder: &Path) -> Result<Marker> {
     let path = folder.join(MARKER);
     platform::plain(&path)?;
     let file = File::open(path)?;
     if file.metadata()?.len() > MAX_MANIFEST {
         return Err("설치 확인 파일이 너무 큽니다.".into());
     }
-    let marker: Marker = serde_json::from_reader(BufReader::new(file))?;
-    validate_manifest(&marker.payload)?;
+    Ok(serde_json::from_reader(BufReader::new(file))?)
+}
+
+fn marker(folder: &Path) -> Result<Marker> {
+    let marker = read_marker(folder)?;
+    validate_manifest(&marker.payload, VERSION)?;
     Ok(marker)
 }
 
@@ -441,6 +445,42 @@ fn matches_file(file: &Path, member: &Member) -> Result<bool> {
     Ok(transfer(file, io::sink(), member.bytes)? == member.sha256)
 }
 
+fn release_version(version: &str) -> Option<[u32; 3]> {
+    let mut fields = version.split('.');
+    let version = [
+        fields.next()?.parse().ok()?,
+        fields.next()?.parse().ok()?,
+        fields.next()?.parse().ok()?,
+    ];
+    fields.next().is_none().then_some(version)
+}
+
+fn previous_rust_target(executable: &Path) -> Result<bool> {
+    let Some(folder) = executable.parent() else {
+        return Ok(false);
+    };
+    let Some(name) = executable.file_name() else {
+        return Ok(false);
+    };
+    if !name.eq_ignore_ascii_case("magic_converter.exe") {
+        return Ok(false);
+    }
+    let manifest = read_marker(folder)?.payload;
+    let Some(previous) = release_version(&manifest.version) else {
+        return Ok(false);
+    };
+    let current = release_version(VERSION).expect("installer release version");
+    if previous[0] != current[0] || previous >= current {
+        return Ok(false);
+    }
+    validate_manifest(&manifest, &manifest.version)?;
+    let Some(member) = manifest.files.iter().find(|member| member.path == "magic_converter.exe")
+    else {
+        return Ok(false);
+    };
+    matches_file(executable, member)
+}
+
 fn install(exe: &Path, folder: &Path) -> Result<Value> {
     let mut archive = payload(exe)?;
     let manifest: Manifest = {
@@ -450,7 +490,7 @@ fn install(exe: &Path, folder: &Path) -> Result<Value> {
         }
         serde_json::from_reader(file)?
     };
-    validate_manifest(&manifest)?;
+    validate_manifest(&manifest, VERSION)?;
     if archive.len() != manifest.files.len() + 1 {
         return Err("설치 번들과 파일 목록이 일치하지 않습니다.".into());
     }

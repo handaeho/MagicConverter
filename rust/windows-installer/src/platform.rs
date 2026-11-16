@@ -1,4 +1,4 @@
-use crate::{PRODUCT, Result, VERSION};
+use crate::{PRODUCT, Result, VERSION, previous_rust_target};
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
@@ -148,6 +148,10 @@ fn legacy_target(exe: &Path) -> bool {
     })
 }
 
+fn can_update_target(executable: &Path) -> bool {
+    legacy_target(executable) || previous_rust_target(executable).unwrap_or(false)
+}
+
 pub fn shortcut(folder: &Path) -> Result<()> {
     let exe = folder.join("magic_converter.exe");
     if !exe.is_file() {
@@ -165,7 +169,7 @@ pub fn shortcut(folder: &Path) -> Result<()> {
             if same(&target, &exe) {
                 return Ok(());
             }
-            if legacy_target(&target) {
+            if can_update_target(&target) {
                 destination = Some((link, true));
                 break;
             }
@@ -242,7 +246,7 @@ fn shell_target() -> Result<Option<PathBuf>> {
 }
 
 pub fn register_shell(folder: &Path) -> Result<()> {
-    if shell_target()?.is_some_and(|target| target.as_os_str().is_empty() || legacy_target(&target))
+    if shell_target()?.is_some_and(|target| target.as_os_str().is_empty() || can_update_target(&target))
     {
         let worker = folder.join("magic_converter-cli.exe");
         if worker.is_file()
