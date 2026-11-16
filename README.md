@@ -8,7 +8,8 @@
 
 [3.0 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v3.0.0/MagicConverter-3.0.0-Windows-x64.zip)의 압축을 풀고 `magic_converter-setup.exe`를 실행합니다. 제거할 때는 같은 ZIP의 `magic_converter-uninstall.exe`를 사용합니다.
 
-Windows 10·11 x64용 Rust 앱입니다. 설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있어 인터넷 연결과 Python 없이 설치하고 사용할 수 있습니다.
+Windows 10·11 x64용 Rust 앱입니다. <br>
+설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있습니다.
 
 1. 기본 설치 위치를 사용하거나 다른 상위 폴더를 고릅니다.
 2. 설치 위치와 라이선스 안내를 확인한 뒤 **예**를 누릅니다.
