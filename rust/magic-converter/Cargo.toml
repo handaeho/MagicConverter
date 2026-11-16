@@ -1,0 +1,81 @@
+[package]
+name = "magic-converter-rust"
+version = "3.0.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+
+[dependencies]
+base64 = "0.22"
+brotli = "8"
+bzip2 = "0.6"
+calamine = { version = "0.38", features = ["chrono"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+clap = { version = "4.5", features = ["derive"] }
+ctrlc = "3.5"
+csv = "1.4"
+ego-tree = "0.11"
+encoding_rs = "0.8"
+filetime = "0.2"
+flate2 = "1"
+gif = "0.14"
+glob = "0.3"
+html-escape = "0.2"
+image = { version = "0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "tiff", "webp"] }
+libloading = "0.8"
+lopdf = { version = "0.38", default-features = false }
+lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "xz"] }
+magic-copy-worker = { path = "../copy-worker" }
+mailparse = "0.18"
+mozjpeg = { version = "0.10.13", default-features = false }
+mupdf-fonts-droid = "0.8"
+mupdf-fonts-noto = "0.8"
+num-bigint = "0.4"
+percent-encoding = "2"
+plist = "1.10"
+png = "0.18"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+rars = { version = "0.12", default-features = false }
+regex = "1"
+resvg = "0.45"
+roxmltree = "0.21"
+rusqlite = { version = "0.37", features = ["bundled"] }
+rust_xlsxwriter = "0.102"
+rustybuzz = "0.20"
+scraper = { version = "0.29", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order", "raw_value"] }
+sha2 = "0.10"
+svg2pdf = "0.13"
+tar = { version = "0.4", default-features = false }
+tempfile = "3.23"
+time = { version = "0.3", features = ["formatting"] }
+tiff = "0.11"
+toml = { version = "0.9", features = ["preserve_order"] }
+ttf-parser = "0.25"
+unicode-casefold = "0.2"
+unicode-bidi = "0.3"
+unicode-properties = { version = "0.1", features = ["general-category"] }
+ureq = { version = "3.5", default-features = false, features = ["native-tls"] }
+url = "2.5"
+uuid = { version = "1", features = ["v4"] }
+webp = { version = "0.3.1", default-features = false }
+wuff = "0.2.10"
+yaml-rust2 = "0.11"
+zip = { version = "9.5", default-features = false, features = ["bzip2", "deflate", "lzma", "time", "zstd"] }
+zstd = { version = "0.14.2", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+windows-core = "0.62"
+windows = { version = "0.62", features = [
+    "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage", "Win32_System_DataExchange", "Win32_System_Memory",
+    "Win32_System_Ole", "Win32_System_SystemServices", "Win32_System_Variant", "Win32_UI_Accessibility", "Win32_UI_Shell",
+] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Graphics_Gdi", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem",
+    "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Registry",
+    "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_SystemInformation", "Win32_System_WindowsProgramming", "Win32_UI_Controls_Dialogs", "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging",
+] }

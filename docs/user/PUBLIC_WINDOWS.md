@@ -1,23 +1,26 @@
-# MagicConverter 2.2.39 설치 안내
+# MagicConverter 3.0 설치 안내
 
-## EXE로 시작하기
+1. Windows x64 ZIP을 풀고 `magic_converter-setup.exe`를 실행합니다.
+2. 기본 위치를 그대로 사용하거나 **아니요**를 눌러 다른 상위 폴더를 고릅니다. 기본 위치는 `%LOCALAPPDATA%\Programs\MagicConverter\3.0.0\magic-converter`입니다. 예를 들어 `D:\Apps`를 고르면 `D:\Apps\magic-converter`에 설치합니다.
+3. 설치 위치와 라이선스 안내를 확인한 뒤 **예**를 누릅니다. 설치가 끝나면 앱을 바로 열 수 있습니다.
 
-1. ZIP을 다운로드해 압축을 푼 뒤 `MagicConverter-Setup.exe`를 실행합니다. [Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.39/MagicConverter-2.2.39-Windows-x64.zip)
-2. 설치 안내를 읽고 라이선스에 동의한 뒤 상위 폴더를 선택합니다. 예를 들어 `D:\Apps`를 선택하면 `D:\Apps\magic-converter`를 새로 만듭니다. 상위 폴더에는 기존 파일이 있어도 됩니다. 같은 이름의 파일이나 폴더가 있으면 다른 상위 폴더를 선택하세요. 기본 설치 위치는 `%LOCALAPPDATA%\Programs\MagicConverter\2.2.39\magic-converter`입니다.
-3. **다음**을 눌러 실제 설치 위치를 확인한 뒤 **설치**를 누릅니다. 마법사가 내장 파일의 해시를 확인한 뒤 Python 3.14.10, 필수 라이브러리 34개, FFmpeg·FFprobe와 rhwp를 설치합니다.
-4. 설치가 끝나면 **마침**을 누릅니다. 바로 앱을 열려면 **MagicConverter 실행**을 선택해 두세요.
+설치본은 Windows 10·11 x64에서 인터넷 연결, 관리자 권한, Python 설치 없이 사용할 수 있습니다. Excel 인쇄와 일부 Office 내보내기는 PC에 설치된 해당 프로그램을 사용합니다.
 
-Windows 10·11 64비트에서 같은 설치 파일을 사용합니다. 인터넷 연결이나 관리자 권한 없이 설치할 수 있습니다. 설치 오류는 `%LOCALAPPDATA%\Programs\MagicConverter\setup-2.2.39.log`에서 확인할 수 있습니다. [제거 안내](UNINSTALL_WINDOWS.md)
+## 2.2.39에서 업그레이드
 
-동영상·오디오 변환에는 함께 설치된 FFmpeg·FFprobe를 사용합니다. HWP·HWPX 변환은 rhwp와 앱의 자체 변환기로 실행합니다. Excel 인쇄와 Office 자동화는 PC에 설치된 해당 프로그램을 사용합니다.
+기존 MagicConverter의 변환과 폴더 감시를 종료하고 3.0을 설치합니다. 기존 설정·결과 기록·감시 규칙은 3.0 전용 프로필 `%LOCALAPPDATA%\MagicConverter\3.0\profile`에 한 번 가져옵니다. 감시가 끝난 항목의 기록을 보존하며, 대기 중이던 원본은 다음 감시 시 다시 확인합니다. 기존 시작 메뉴 바로가기와 탐색기 메뉴는 3.0을 가리킵니다.
 
-## CLI로 시작하기
+3.0에서 프리셋과 이전 기록을 확인한 후 2.2.39를 제거할 수 있습니다. 2.2.39 제거 도구는 3.0의 프로필을 제거하지 않습니다. `--data-dir` 또는 `MAGIC_CONVERTER_PROFILE_DIR`로 별도 설정 폴더를 쓰는 경우 같은 값을 3.0에도 지정할 수 있습니다.
 
-PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_magic_converter.py`를 실행합니다.
+## CLI와 MCP
+
+설치 폴더를 열고 PowerShell에서 실행합니다.
 
 ```powershell
-.\runtime\python.exe .\app\run_magic_converter.py --help
-.\runtime\python.exe .\app\run_magic_converter.py convert --to png "C:\Files\sample.jpg" --output "C:\Files\out"
+.\magic_converter-cli.exe --version
+.\magic_converter-cli.exe convert --to png "C:\Files\sample.jpg" --output "C:\Files\out"
 ```
 
-현재는 Python 파일을 실행하는 방식입니다. MCP 전환은 후속 버전에서 진행할 예정입니다.
+MCP 클라이언트에 `magic_converter-mcp.exe`를 stdio 서버로 등록합니다.
+
+[제거 안내](UNINSTALL_WINDOWS.md)

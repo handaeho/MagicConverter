@@ -1,0 +1,18 @@
+LIBRARY libavif-16.dll
+EXPORTS
+    avifDecoderCreate
+    avifDecoderDestroy
+    avifDecoderNextImage
+    avifDecoderParse
+    avifDecoderSetIOMemory
+    avifEncoderAddImage
+    avifEncoderCreate
+    avifEncoderDestroy
+    avifEncoderFinish
+    avifImageCreate
+    avifImageDestroy
+    avifImageRGBToYUV
+    avifImageYUVToRGB
+    avifRGBImageSetDefaults
+    avifResultToString
+    avifRWDataFree

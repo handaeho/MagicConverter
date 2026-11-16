@@ -1,0 +1,164 @@
+{
+  "source": "https://mirror.msys2.org/mingw/ucrt64/",
+  "packages": {
+    "avif": {
+      "file": "mingw-w64-ucrt-x86_64-libavif-1.4.2-1-any.pkg.tar.zst",
+      "sha256": "9dea354b257d2e593c82c88390a178be547faaaa06f366070b4f8abc784277e6",
+      "dlls": {
+        "libavif-16.dll": "9986e8a1d6735c938dad0a7062cb9dbcf0cd65d32eb9347c705205fb6da070ad"
+      },
+      "headers": {
+        "avif/avif.h": "43ec2563fcc739a4d5ca18e22f74bc15e76a11f8c9a82bd7e1ee572bff7afc04"
+      }
+    },
+    "yuv": {
+      "file": "mingw-w64-ucrt-x86_64-libyuv-1924.r2921.644251f25-2-any.pkg.tar.zst",
+      "sha256": "3016e0f97bf38313bb336447739f636c8622fc0ca2236fe48e3f6cd662ef56cb",
+      "dlls": {
+        "libyuv.dll": "ecba917cb08e6208bb9c28156f0f5106d5cb2aa91801c5bd868c242c41625ebd"
+      }
+    },
+    "aom": {
+      "file": "mingw-w64-ucrt-x86_64-aom-3.15.3-1-any.pkg.tar.zst",
+      "sha256": "0fcdc93058a9b937e4f4faa0d6b03aa901c2ef568f5bb68ed88bd9c05a7a33f7",
+      "dlls": {
+        "libaom.dll": "9b2bf9122f924b9ad7f9c2be31133758331fd7a7fd33261a63a6d620b31f1883"
+      }
+    },
+    "brotli": {
+      "file": "mingw-w64-ucrt-x86_64-brotli-1.2.1-1-any.pkg.tar.zst",
+      "sha256": "e3257d4303fc0aca4c64f702d4c8cd766a321351c5e61927631c30bfdf2e7536",
+      "dlls": {
+        "libbrotlicommon.dll": "7b0047dc16dd92a7932124dfd5a6e698d342f533a15d37d61f710def66091436",
+        "libbrotlidec.dll": "c4c987a01597ddf969d93023f933f999a20f285588b0decb4deeb780c9e9cdf8",
+        "libbrotlienc.dll": "03f9a82d293caf5b4065a9641dd5309e27aefc5c8111eeec25f906e47ec6c934"
+      }
+    },
+    "crypto++": {
+      "file": "mingw-w64-ucrt-x86_64-crypto++-8.9.0-2-any.pkg.tar.zst",
+      "sha256": "34a524d2956926791a88f8fed87a0513dd2097c06325a111b241e9dc6da28193",
+      "dlls": {
+        "libcryptopp.dll": "ca63c3b48b96f7fda821472723e261664869655845cd451972ec5a1246330642"
+      }
+    },
+    "dav1d": {
+      "file": "mingw-w64-ucrt-x86_64-dav1d-1.5.4-1-any.pkg.tar.zst",
+      "sha256": "ccf26c6f29fd36f5692d57fd5e0fe3becec492e0b875fd5e04f47a9582eb8b37",
+      "dlls": {
+        "libdav1d-7.dll": "bbe67862f77c22f6f509684207b5363542e5b52c1a1faa354e12a11d072ad766"
+      }
+    },
+    "kvazaar": {
+      "file": "mingw-w64-ucrt-x86_64-kvazaar-2.3.2-1-any.pkg.tar.zst",
+      "sha256": "1f42ae66c7dd730a7ce8b93bd2fce4896e7b7bd46bb0d2b318c6dd55d5ae12ec",
+      "dlls": {
+        "libkvazaar-7.dll": "642f969e7118ae8e8068c30182fbda3cd6100c5f291f404d9f37d6fd00982c30"
+      }
+    },
+    "libde265": {
+      "file": "mingw-w64-ucrt-x86_64-libde265-1.1.3-1-any.pkg.tar.zst",
+      "sha256": "2d722373ff26d4f281cbfa49e4518ee00aa5d9ccbba0e6cbde7cade50124e9fa",
+      "dlls": {
+        "libde265-0.dll": "2f68bea90a116aec63c6d5c5db6ef483166fdc2a09156986f23c90964c33a5d8"
+      }
+    },
+    "libgcc": {
+      "file": "mingw-w64-ucrt-x86_64-libgcc-16.2.0-6-any.pkg.tar.zst",
+      "sha256": "80b2497f019977dd9528b1abc8621b1328a0115ab1f724047ccbb56bf323f11d",
+      "dlls": {
+        "libgcc_s_seh-1.dll": "791ebf66e99c7c1b4ed3666468cec45a0172b4c8942ac6c84c3e9cab3e1b5270"
+      }
+    },
+    "libheif": {
+      "file": "mingw-w64-ucrt-x86_64-libheif-1.23.7-1-any.pkg.tar.zst",
+      "sha256": "394f86529164f878b78e505f0585ddfb12b20c55e965467551c3264a54416cc5",
+      "dlls": {
+        "libheif.dll": "5363e5d46d93d9a157ab8759b89d61dad1dfbd6bda236ab279105866c05da4ff"
+      }
+    },
+    "libjpeg-turbo": {
+      "file": "mingw-w64-ucrt-x86_64-libjpeg-turbo-3.2.1-1-any.pkg.tar.zst",
+      "sha256": "8eed77c1e0d6de7f8822687f7b1dfa32cda09394806ef67b23399e63de1a92a6",
+      "dlls": {
+        "libjpeg-8.dll": "22286acc18b907d03eec1177c99f54a802a6f8437888d1abb79e65a7ecd14605"
+      }
+    },
+    "libstdc++": {
+      "file": "mingw-w64-ucrt-x86_64-libstdc++-16.2.0-6-any.pkg.tar.zst",
+      "sha256": "33c5e58a85a538cf843a8672991cce591f0231d66da3b66a57629712d64be17f",
+      "dlls": {
+        "libstdc++-6.dll": "4e4822dc4aaa99383f581dae7ab9464ae89346c5ca742f7efbcdebe20b0fe7b5"
+      }
+    },
+    "libwebp": {
+      "file": "mingw-w64-ucrt-x86_64-libwebp-1.6.0-1-any.pkg.tar.zst",
+      "sha256": "34ff8396c403d484c8777ad49ad0fc06dfb94fadf6f14bcf84d50c45bc6fd17e",
+      "dlls": {
+        "libsharpyuv-0.dll": "d29380c7056383f3e7a80bf9e150f0b8c425c1cf2568d1336e88979ddc2307af"
+      }
+    },
+    "libwinpthread": {
+      "file": "mingw-w64-ucrt-x86_64-libwinpthread-14.0.0.r598.ge3d18511f-1-any.pkg.tar.zst",
+      "sha256": "c35d6be83d141c8cfbb61f1637dd4b53aac8f5562d766aa26d0741c40bad4e4d",
+      "dlls": {
+        "libwinpthread-1.dll": "94a9a4e2fe27b4bc827a4b209e9deb4cc3dc34bc025df06b849144f9d4c588f8"
+      }
+    },
+    "libx264": {
+      "file": "mingw-w64-ucrt-x86_64-libx264-0.165.r3222.b35605a-3-any.pkg.tar.zst",
+      "sha256": "10d3817153fc05832643ebc5da9aec940b4ae2d9dadb6643ac3c282985880434",
+      "dlls": {
+        "libx264-165.dll": "a58995b5af6d0fcf5d17f354bfa54bb05d99056ed167eec9c8e86a3a63478ec1"
+      }
+    },
+    "openh264": {
+      "file": "mingw-w64-ucrt-x86_64-openh264-2.7.0-1-any.pkg.tar.zst",
+      "sha256": "e73f2c6dc5afdb69d98da8ca89d494f606e5f5b01768071132dab8f02950cfae",
+      "dlls": {
+        "libopenh264-8.dll": "f0b0390827ca093d8dba38910f196b1bf1bc5b16abba0931de86dd040f233da3"
+      }
+    },
+    "openjpeg2": {
+      "file": "mingw-w64-ucrt-x86_64-openjpeg2-2.5.4-2-any.pkg.tar.zst",
+      "sha256": "2a4c148052b6f8e47abe5e98b29fd8942e2e3c17722ff00f172b1630897a10b9",
+      "dlls": {
+        "libopenjp2-7.dll": "94f9507828d391cf96d700d34918114f1c1e03f91dd1243a19275e0435690925"
+      }
+    },
+    "openjph": {
+      "file": "mingw-w64-ucrt-x86_64-openjph-0.32.0-1-any.pkg.tar.zst",
+      "sha256": "5ef96678170cf69ebb553723cf9209e61ce21f85b7afe084da7797d686e98b5c",
+      "dlls": {
+        "libopenjph-0.32.dll": "df855ffad9c18824e64ba220be0d9f9101c6e73f21d418c34ee187a97b65ae1a"
+      }
+    },
+    "rav1e": {
+      "file": "mingw-w64-ucrt-x86_64-rav1e-0.8.1-1-any.pkg.tar.zst",
+      "sha256": "00a03a734f96f66405ad79bae2ffb1c5cf2b050ef90a4ffa508ddbfdb64c0fb1",
+      "dlls": {
+        "librav1e.dll": "bc549e2178589f371469d1bd23544859ff118e48218eae2bfca7126654988779"
+      }
+    },
+    "svt-av1": {
+      "file": "mingw-w64-ucrt-x86_64-svt-av1-4.3.0-1-any.pkg.tar.zst",
+      "sha256": "eb5d2a1ed600d606cbfaafa056674940cb2bd38c8b9bdd1003b2e64aff5d889a",
+      "dlls": {
+        "libSvtAv1Enc-4.dll": "4f40f05a3d7ee53fdaefd2179cfeae0a75ca90e8f66d72e515b0893802426fe1"
+      }
+    },
+    "x265": {
+      "file": "mingw-w64-ucrt-x86_64-x265-4.3-1-any.pkg.tar.zst",
+      "sha256": "40dd235ba4294266ecad0eec661fae7db25dfe9df2ee9a7c3e07b0d079ae2034",
+      "dlls": {
+        "libx265-217.dll": "48a6c942cab3196d740d7af3cfc8359dc7bd833c87c1ca24b8d231b70daa9e18"
+      }
+    },
+    "zlib": {
+      "file": "mingw-w64-ucrt-x86_64-zlib-1.4-2-any.pkg.tar.zst",
+      "sha256": "172541cf5e2391a402f092104988699b0163129d22be1d6b4b201bfb84af6fcf",
+      "dlls": {
+        "zlib1.dll": "aa658771fb152b095eda1614d8bde798efb92324b6f4a0c99c743cd96b67ac90"
+      }
+    }
+  }
+}

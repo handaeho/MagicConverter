@@ -1,0 +1,11 @@
+{
+  "version": "6.12.0",
+  "pyside_files": {
+    "Qt6Core.dll": "f57ed38afd95d0306cca9d88d997f639f70c7628a4f1f064eae291d579487121",
+    "Qt6Gui.dll": "abd20026e190e8cc69667d1bea042db05cd353cc05e7da74b063c20b7da3f6cd",
+    "Qt6Svg.dll": "8f1de5b28aab1eedb415c751c81f9cfaa2804242868c0ceea5f3fdb4b2babca4",
+    "plugins/platforms/qoffscreen.dll": "d24ef380ab0882d39f21539dcf57ab4213875a6fc658a53012f2d2fd275c6f69",
+    "msvcp140_1.dll": "2be87527c41e1ba8aff48e326e0adcd4743516e0bbcc9304986c726e27de6aca",
+    "msvcp140_2.dll": "6a72ed8a87eae1671640bd1ca98eccb989f1772ae46ab84594e385bf6d4ac4fb"
+  }
+}

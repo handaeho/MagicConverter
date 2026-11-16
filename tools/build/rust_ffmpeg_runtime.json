@@ -1,0 +1,16 @@
+{
+  "source": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-full_build-shared.7z",
+  "sha256": "4d2060a8b34a940aa47d785142055bb92a63053781e55f2ace4546edd519a8f5",
+  "files": {
+    "LICENSE": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "bin/avcodec-63.dll": "4d458a276fda363709ed2ac4ad14aea122c536e61919feebd919d5f8490be7a9",
+    "bin/avdevice-63.dll": "3e74aa37e9e21debccfaf4aef24aa2a946854109ac066f78d8c1f984bc82b209",
+    "bin/avfilter-12.dll": "4ec6eb2db944740c364d93b29d91c9137beb38d09e923f6ed14f31aa039851de",
+    "bin/avformat-63.dll": "360e66109b2ce3f02d56cd940e625a6909304eea1f4d0fcbbbb2d40d74308ee0",
+    "bin/avutil-61.dll": "9230e42b6b8e1fa20ec83af1eb4c4b2ae90b0c8d7c29093369250eed562372df",
+    "bin/ffmpeg.exe": "b1a495a71491bf208f95043ca06654ad76d59738533ec8ff237a759e29abd2a3",
+    "bin/ffprobe.exe": "26283152241767bb54a09009de2eea3408549d1840ab3a0725320253557c0532",
+    "bin/swresample-7.dll": "1f2a0bdca315f1a05fe398e7a0d97db8d0e34ba2a86ec59303bf32bbd9430123",
+    "bin/swscale-10.dll": "af91db7f45644157469a110438a8c648314927ec83e334d4cacac3870d99fabe"
+  }
+}

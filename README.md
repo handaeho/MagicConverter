@@ -1,61 +1,39 @@
-<h1 align="center">
-  <img src="assets/readme/hero.svg" alt="MagicConverter — Windows 파일 변환기" width="100%">
-</h1>
+# MagicConverter 3.0 — Windows 파일 변환기
 
-탐색기에서 파일을 끌어 즉시 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
+탐색기에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
 
 [EXE로 시작하기](#exe로-시작하기) · [CLI로 시작하기](#cli로-시작하기)
 
 ## EXE로 시작하기
 
-ZIP에는 다음 실행 프로그램이 포함됩니다.
+[3.0 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v3.0.0/MagicConverter-3.0.0-Windows-x64.zip)의 압축을 풀고 `magic_converter-setup.exe`를 실행합니다. 제거할 때는 같은 ZIP의 `magic_converter-uninstall.exe`를 사용합니다.
 
-- [MagicConverter 2.2.39 Windows ZIP](https://github.com/handaeho/MagicConverter/releases/download/v2.2.39/MagicConverter-2.2.39-Windows-x64.zip)
-- 설치 마법사 `MagicConverter-Setup.exe`
-- 제거 마법사 `Uninstall.exe`
+Windows 10·11 x64용 Rust 앱입니다. 설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있어 인터넷 연결과 Python 없이 설치하고 사용할 수 있습니다.
 
-압축을 푼 뒤 설치 마법사를 실행합니다. 
-
-- Windows 10·11 64비트용입니다.
-- 설치 마법사가 내장된 Python, 필수 라이브러리, FFmpeg·FFprobe와 rhwp를 설치합니다.
-- 인터넷 연결 없이 설치할 수 있습니다.
-
-1. 설치 안내를 읽고 라이선스에 동의합니다.
-2. 설치 폴더를 고르고 확인한 뒤 **설치**를 누릅니다.
+1. 기본 설치 위치를 사용하거나 다른 상위 폴더를 고릅니다.
+2. 설치 위치와 라이선스 안내를 확인한 뒤 **예**를 누릅니다.
 3. 앱이 열리면 탐색기에서 파일을 드래그하고 <kbd>Shift</kbd>를 눌러 변환 형식을 선택합니다. <kbd>Ctrl</kbd>을 누르면 파일 도구 휠이 열립니다.
 
-[설치 안내](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스와 대응 소스](https://github.com/handaeho/MagicConverter/releases/tag/v2.2.39)
-
-<p align="center">
-  <img src="assets/readme/demo.gif" alt="JPG를 휠로 끌어 PNG로 변환하는 예" width="100%">
-  <br><sub><a href="assets/readme/demo-still.png">정지 화면으로 보기</a></sub>
-</p>
+[설치 및 2.2.39에서 업그레이드](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [릴리스 목록](https://github.com/handaeho/MagicConverter/releases)
 
 일반 PNG 변환은 지원하는 EXIF 정보를 보존합니다. 공유용 파일에서 작성자나 위치 등 메타데이터를 지우려면 도구 휠에서 **메타데이터 제거**를 선택하세요.
 
 ## CLI로 시작하기
 
-PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_magic_converter.py`를 실행합니다.
+PowerShell에서 설치 폴더를 열고 `magic_converter-cli.exe`를 실행합니다.
 
 ```powershell
-.\runtime\python.exe .\app\run_magic_converter.py --help
-.\runtime\python.exe .\app\run_magic_converter.py convert --to png "C:\Files\sample.jpg" --output "C:\Files\out"
+.\magic_converter-cli.exe --help
+.\magic_converter-cli.exe convert --to png "C:\Files\sample.jpg" --output "C:\Files\out"
 ```
 
-현재는 Python 파일을 실행하는 방식입니다. <br> 
-**MCP 전환은 후속 버전에서 공개**할 예정입니다.
+MCP 클라이언트에는 같은 폴더의 `magic_converter-mcp.exe`를 stdio 서버로 등록합니다. 폴더 감시와 로컬 요청은 CLI의 `watch`, `serve`, `send` 명령을 사용합니다.
 
 ## 지원 확장자와 변환 가능 목록
 
-현재 지원하는 **82종·95개 확장자 표기** 전체입니다. <br>
-입력 확장자 94개와 출력 전용 `.html`을 포함합니다. <br>
-대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다.
+현재 소스에 등록된 **82종·95개 확장자 표기**입니다. 입력 확장자 94개와 출력 전용 `.html`을 포함합니다. 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다. 설치본의 지원 목록은 해당 버전 태그의 README에서 확인할 수 있습니다.
 
-**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상입니다. <br> 
-**CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. <br> 
-필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. <br> 
-여러 파일을 함께 놓으면 공통 대상만 표시됩니다. <br> 
-실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
+**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상이고, **CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. 필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. 여러 파일을 함께 놓으면 공통 대상만 표시됩니다. 실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
 
 | 분류 | 입력 확장자 | 변환 휠 출력 | CLI 추가 출력 | 조건·특징 |
 | --- | --- | --- | --- | --- |
@@ -161,5 +139,4 @@ PowerShell에서 선택한 설치 폴더를 열고 설치된 Python으로 `run_m
 - 설치 ZIP에는 FFmpeg·FFprobe·rhwp가 포함됩니다. 슬라이드의 PDF/이미지 출력에는 PowerPoint 또는 LibreOffice가, **Excel 인쇄**에는 Microsoft Excel이 필요합니다.
 - 형식 변환 외에 모든 파일은 Ctrl 파일 도구의 **ZIP 압축**으로 묶을 수 있습니다. CLI 추가 대상은 `convert --to wav sample.mp4`처럼 선택하며, PDF → PPTX 모드는 `--action pptx_image` 또는 `--action pptx_editable`로 고릅니다.
 
-프로젝트 코드와 [MagicConverter 아이콘](assets/README.md)은 [AGPL-3.0-or-later](LICENSE)로 공개합니다. <br> 
-[외부 구성요소 고지](docs/legal/THIRD_PARTY_NOTICES.md)
+프로젝트 코드와 [MagicConverter 아이콘](assets/README.md)은 [AGPL-3.0-or-later](LICENSE)로 공개합니다. [외부 구성요소 고지](docs/legal/THIRD_PARTY_NOTICES.md)
