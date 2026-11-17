@@ -24,13 +24,13 @@ Windows 10·11 x64, Mac에서 동작하는 Rust 앱입니다. <br>
 
 [설치 및 업그레이드](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [3.0.5 변경 사항](docs/release/3.0.5.md) · [릴리스 목록](https://github.com/handaeho/MagicConverter/releases)
 
-## EXE로 시작하기
+## Windows에서 시작하기
 
 Windows 10·11 x64를 지원합니다. 다운로드 및 압축 해제 후 **설치 마법사의 안내**에 따르세요.
 
 [MagicConverter 3.0.5 Windows x64 설치 ZIP 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5/MagicConverter-3.0.5-Windows-x64.zip)
 
-## macOS로 시작하기
+## macOS에서 시작하기
 
 macOS 15 이상을 지원합니다. Mac의 칩에 맞는 ZIP을 풀어 `MagicConverter.app`을 **응용 프로그램**으로 옮기세요.
 
