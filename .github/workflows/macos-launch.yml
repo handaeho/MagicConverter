@@ -1,0 +1,50 @@
+name: macOS Launch Services verification
+on:
+  push:
+    branches: ['codex/macos-launch-check']
+    paths: ['.github/workflows/macos-launch.yml', 'tools/validation/verify_macos_launch.swift']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  published-app:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            sha: ecb6685affa8ce208af00ad6cf2ea686189a763035298f6638e73f6f18c1649a
+          - runner: macos-15-intel
+            arch: x86_64
+            sha: 96079fae47800065e47a62061e9c8917ed4b01add58d70245434d04bcf1d4014
+          - runner: macos-26
+            arch: arm64
+            sha: ecb6685affa8ce208af00ad6cf2ea686189a763035298f6638e73f6f18c1649a
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Open the published ZIP through Launch Services
+        shell: bash
+        run: |
+          sw_vers
+          uname -m
+          name="MagicConverter-3.0.5-macOS-${{ matrix.arch }}.zip"
+          cd "$RUNNER_TEMP"
+          curl --fail --silent --show-error --location --retry 2 -O "https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/$name"
+          printf '%s  %s\n' '${{ matrix.sha }}' "$name" | shasum -a 256 -c -
+          mkdir -p "$HOME/Applications"
+          ditto -x -k "$name" "$HOME/Applications"
+          app="$HOME/Applications/MagicConverter.app"
+          codesign --verify --deep --strict "$app"
+          xcrun swiftc "$GITHUB_WORKSPACE/tools/validation/verify_macos_launch.swift" -o "$RUNNER_TEMP/check-window"
+          /usr/bin/open -n -a "$app"
+          "$RUNNER_TEMP/check-window" "$app"
+      - name: Report launch failures
+        if: failure()
+        shell: bash
+        run: |
+          /usr/bin/log show --last 3m --style compact --predicate 'process == "MagicConverter" OR eventMessage CONTAINS[c] "com.handaeho.magicconverter"' | tail -n 120
