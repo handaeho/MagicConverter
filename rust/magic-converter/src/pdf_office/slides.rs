@@ -140,12 +140,19 @@ fn drawing(shape: &Drawing, fit: &Fit, id: usize, output: &mut String) {
     .unwrap();
 }
 
-fn runs(line: &Line<'_>, scale: f64, leading: Option<f64>, margins: [f64; 2], output: &mut String) {
+fn runs(
+    line: &Line<'_>,
+    scale: f64,
+    leading: Option<f64>,
+    margins: [f64; 2],
+    alignment: &str,
+    output: &mut String,
+) {
     let [left, after] = margins;
     let margin = emu(left * scale);
     write!(
         output,
-        r#"<a:p><a:pPr fontAlgn="base" latinLnBrk="0" hangingPunct="0" marL="{margin}"><a:lnSpc>"#
+        r#"<a:p><a:pPr algn="{alignment}" fontAlgn="base" latinLnBrk="0" hangingPunct="0" marL="{margin}"><a:lnSpc>"#
     )
     .unwrap();
     if let Some(leading) = leading {
@@ -217,7 +224,14 @@ fn text(line: &Line<'_>, fit: &Fit, id: usize, output: &mut String) {
     let [x, y, cx, cy] = fit.frame(bounds);
     let top = inset.unwrap_or(0);
     write!(output, r#"<p:sp><p:nvSpPr><p:cNvPr id="{id}" name="PDF text {id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm{rotation}><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="none" lIns="0" rIns="0" tIns="{top}" bIns="0"/><a:lstStyle/>"#).unwrap();
-    runs(line, fit.scale, inset.map(|_| leading), [0.0; 2], output);
+    runs(
+        line,
+        fit.scale,
+        inset.map(|_| leading),
+        [0.0; 2],
+        "l",
+        output,
+    );
     output.push_str("</p:txBody></p:sp>");
 }
 
@@ -287,6 +301,54 @@ fn table_borders<'a>(table: &Table, page: &'a Page) -> Vec<(&'a Drawing, Ruling,
 
 fn exact_line(a: f64, b: f64) -> bool {
     (a - b).abs() <= 0.1
+}
+
+fn diagram_inside_cell(cell: &Cell, page: &Page) -> bool {
+    let mut first: Option<Box2> = None;
+    for shape in &page.paths {
+        let b = shape.bounds;
+        if shape.fill.is_none()
+            || !matches!(shape.commands.last(), Some(PathCommand::Close))
+            || b.width() < 16.0
+            || b.height() < 12.0
+            || b.x0 <= cell.bounds.x0 + SNAP
+            || b.y0 <= cell.bounds.y0 + SNAP
+            || b.x1 >= cell.bounds.x1 - SNAP
+            || b.y1 >= cell.bounds.y1 - SNAP
+            || !content(b, page).any(|span| span.order > shape.order)
+        {
+            continue;
+        }
+        if let Some(previous) = first {
+            if previous.intersection(b).is_none() {
+                return true;
+            }
+        } else {
+            first = Some(b);
+        }
+    }
+    false
+}
+
+fn centered_vertically(lines: &[Line<'_>], cell: &Cell) -> bool {
+    let Some((first, last)) = lines.first().zip(lines.last()) else {
+        return false;
+    };
+    let Some([_, first_y]) = first.spans[0].origin else {
+        return false;
+    };
+    let Some([_, last_y]) = last.spans[0].origin else {
+        return false;
+    };
+    let center = (first_y - first.size * 0.95 + last_y + last.size * 0.21) * 0.5;
+    (center - cell.bounds.center()[1]).abs() <= first.size.max(last.size) * 0.23
+        && lines.windows(2).all(|pair| {
+            let a = pair[0].spans[0].origin;
+            let b = pair[1].spans[0].origin;
+            let size = pair[0].size.max(pair[1].size);
+            a.zip(b)
+                .is_some_and(|([_, y1], [_, y2])| (0.9 * size..=1.45 * size).contains(&(y2 - y1)))
+        })
 }
 
 fn cell_text_layout(lines: &[Line<'_>], cell: &Cell) -> Option<(f64, Vec<[f64; 3]>)> {
@@ -366,7 +428,7 @@ fn table(
             if col == cell.col && cell.cols > 1 {
                 write!(output, " gridSpan=\"{}\"", cell.cols).unwrap();
             }
-            output.push_str(r#"><a:txBody><a:bodyPr/><a:lstStyle/>"#);
+            output.push_str(r#"><a:txBody><a:bodyPr wrap="none"/><a:lstStyle/>"#);
             let lines = if row == cell.row && col == cell.col {
                 lines(content(cell.bounds, page))
             } else {
@@ -375,37 +437,72 @@ fn table(
             if lines.is_empty() {
                 output.push_str("<a:p/>");
             }
-            let text_layout = cell_text_layout(&lines, cell);
+            let middle = centered_vertically(&lines, cell);
+            let text_layout = if middle {
+                None
+            } else {
+                cell_text_layout(&lines, cell)
+            };
             for (index, line) in lines.iter().enumerate() {
+                let left = line.spans[0].origin.map_or(line.bounds.x0, |p| p[0]);
+                let center = (left + line.bounds.x1) * 0.5;
+                let centered =
+                    (center - cell.bounds.center()[0]).abs() <= (line.size * 0.25).max(1.5);
+                let align = if centered { "ctr" } else { "l" };
                 if let Some((_, measures)) = &text_layout {
                     let [left, leading, after] = measures[index];
-                    runs(line, fit.scale, Some(leading), [left, after], output);
+                    runs(
+                        line,
+                        fit.scale,
+                        Some(leading),
+                        [if centered { 0.0 } else { left }, after],
+                        align,
+                        output,
+                    );
                 } else {
-                    runs(line, fit.scale, None, [0.0; 2], output);
+                    let left = if centered {
+                        0.0
+                    } else {
+                        (left - cell.bounds.x0).max(0.0)
+                    };
+                    runs(line, fit.scale, None, [left, 0.0], align, output);
                 }
             }
-            let [left, right, top, bottom] =
-                text_layout.map_or([3.0, 3.0, 1.0, 1.0], |(top, _)| [0.0, 0.0, top, 0.0]);
-            let [left, right, top, bottom] = [left, right, top, bottom].map(|n| emu(n * fit.scale));
+            let top = text_layout.as_ref().map_or_else(
+                || {
+                    if middle {
+                        return 0.0;
+                    }
+                    lines.first().map_or(0.0, |line| {
+                        let baseline = line.spans[0].origin.map_or(line.bounds.y1, |p| p[1]);
+                        (baseline - cell.bounds.y0 - line.size * 1.08).max(0.0)
+                    })
+                },
+                |(top, _)| *top,
+            );
+            let top = emu(top * fit.scale);
+            let anchor = if middle { "ctr" } else { "t" };
             write!(
                 output,
-                r#"</a:txBody><a:tcPr marL="{left}" marR="{right}" marT="{top}" marB="{bottom}">"#
+                r#"</a:txBody><a:tcPr marL="0" marR="0" marT="{top}" marB="0" anchor="{anchor}">"#
             )
             .unwrap();
-            if let Some((stroke, rgba)) = border {
-                let width = emu(stroke * fit.scale).max(1);
-                for (name, visible) in [
-                    ("lnL", col == cell.col),
-                    ("lnR", col + 1 == cell.col + cell.cols),
-                    ("lnT", row == cell.row),
-                    ("lnB", row + 1 == cell.row + cell.rows),
-                ] {
+            for (name, visible) in [
+                ("lnL", col == cell.col),
+                ("lnR", col + 1 == cell.col + cell.cols),
+                ("lnT", row == cell.row),
+                ("lnB", row + 1 == cell.row + cell.rows),
+            ] {
+                if let Some((stroke, rgba)) = border.filter(|_| visible) {
+                    let width = emu(stroke * fit.scale).max(1);
                     write!(
                         output,
                         r#"<a:{name} w="{width}">{}</a:{name}>"#,
-                        solid(visible.then_some(rgba))
+                        solid(Some(rgba))
                     )
                     .unwrap();
+                } else {
+                    write!(output, "<a:{name}><a:noFill/></a:{name}>").unwrap();
                 }
             }
             output.push_str("<a:noFill/></a:tcPr></a:tc>");
@@ -433,10 +530,15 @@ pub(super) fn slides(
             .iter()
             .flat_map(|chart| chart.owners.iter().copied())
             .collect();
-        let tables: Vec<_> = tables(&page)
+        let tables: Vec<_> = detect_tables(&page, true)
             .into_iter()
             .filter(|table| {
-                !content(table.bounds, &page).any(|span| chart_objects.contains(&span.order))
+                !content(table.bounds, &page)
+                    .any(|span| chart_objects.contains(&span.order) || span.rotation.abs() > 0.001)
+                    && !table
+                        .cells
+                        .iter()
+                        .any(|cell| diagram_inside_cell(cell, &page))
             })
             .collect();
         let table_edges: Vec<_> = tables

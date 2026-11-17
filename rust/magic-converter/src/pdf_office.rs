@@ -249,6 +249,66 @@ fn grid(component: &[Ruling]) -> Option<Table> {
 }
 
 fn tables(page: &Page) -> Vec<Table> {
+    detect_tables(page, false)
+}
+
+// PDF table outlines can be open: a filled header can replace a top rule,
+// and horizontal row rules can end at an unpainted left or right edge.
+fn open_grid(component: &[Ruling], existing: Option<&Table>) -> Option<Table> {
+    let mut borders = [[f64::INFINITY, f64::NEG_INFINITY]; 2];
+    for line in component {
+        let [lo, hi] = &mut borders[line.axis];
+        *lo = lo.min(line.coordinate);
+        *hi = hi.max(line.coordinate);
+        let [lo, hi] = &mut borders[1 - line.axis];
+        *lo = lo.min(line.start);
+        *hi = hi.max(line.end);
+    }
+    let mut extended = component.to_vec();
+    for axis in 0..=1 {
+        let [start, end] = borders[1 - axis];
+        for (index, coordinate) in borders[axis].into_iter().enumerate() {
+            let mut ends: Vec<_> = component
+                .iter()
+                .filter_map(|line| {
+                    if line.axis == axis {
+                        return None;
+                    }
+                    let tip = if index == 0 { line.start } else { line.end };
+                    ((tip - coordinate).abs() <= SNAP).then_some(line.coordinate)
+                })
+                .collect();
+            ends.sort_by(f64::total_cmp);
+            ends.dedup_by(|a, b| (*a - *b).abs() <= SNAP);
+            if ends.len() >= 3
+                && ends[ends.len() - 1] - ends[0] >= (end - start) * 0.5
+                && !component
+                    .iter()
+                    .any(|line| line.axis == axis && (line.coordinate - coordinate).abs() <= SNAP)
+            {
+                extended.push(Ruling {
+                    axis,
+                    coordinate,
+                    start,
+                    end,
+                });
+            }
+        }
+    }
+    if extended.len() == component.len() {
+        return None;
+    }
+    let table = grid(&extended)?;
+    if table.xs.len() < 4
+        || table.ys.len() < 4
+        || existing.is_some_and(|old| table.cells.len() <= old.cells.len())
+    {
+        return None;
+    }
+    Some(table)
+}
+
+fn detect_tables(page: &Page, recover_open_edges: bool) -> Vec<Table> {
     let segments = rulings(page);
     let mut seen = vec![false; segments.len()];
     let mut result = Vec::new();
@@ -268,7 +328,18 @@ fn tables(page: &Page) -> Vec<Table> {
                 }
             }
         }
-        if let Some(table) = grid(&component)
+        let closed = grid(&component);
+        let open = if recover_open_edges {
+            open_grid(&component, closed.as_ref()).filter(|table| {
+                closed.as_ref().is_none_or(|old| {
+                    content(table.bounds, page)
+                        .any(|span| !old.bounds.contains(span.bounds.center()))
+                })
+            })
+        } else {
+            None
+        };
+        if let Some(table) = open.or(closed)
             && page
                 .spans
                 .iter()
