@@ -129,6 +129,12 @@ fn pixels(width: u32, height: u32, frames: u64, limit: u64) -> io::Result<u64> {
 }
 
 pub fn supports(edge: &Edge) -> bool {
+    #[cfg(target_os = "macos")]
+    for format in [&edge.source, &edge.target] {
+        if (format == "heic" && !heif::available()) || (format == "avif" && !avif::available()) {
+            return false;
+        }
+    }
     let input = readable(&edge.source);
     let output = matches!(
         edge.target.as_str(),

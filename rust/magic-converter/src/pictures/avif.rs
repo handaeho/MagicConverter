@@ -52,7 +52,12 @@ macro_rules! api {
         struct Engine { _library: Library, $($name: $ty),+ }
         impl Engine {
             fn load() -> io::Result<Self> {
-                let path = super::heif::runtime_library("magic_avif_bridge.dll")?;
+                let name = if cfg!(target_os = "macos") {
+                    "libmagic_avif_bridge.dylib"
+                } else {
+                    "magic_avif_bridge.dll"
+                };
+                let path = super::heif::runtime_library(name)?;
                 #[cfg(windows)]
                 let library: Library = unsafe {
                     use windows_sys::Win32::System::LibraryLoader::*;
@@ -100,6 +105,11 @@ fn engine() -> io::Result<&'static Engine> {
         .get_or_init(|| Engine::load().map_err(|err| err.to_string()))
         .as_ref()
         .map_err(|error| io::Error::other(error.clone()))
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn available() -> bool {
+    engine().is_ok()
 }
 
 struct Owned(Handle, Close);

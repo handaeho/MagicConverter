@@ -160,9 +160,12 @@ pub fn supports(edge: &Edge) -> bool {
     let office = canonical(&edge.source).is_some();
     (hwp && edge.engine_id == "hwp_documents"
         && edge.target == "docx"
-        && (cfg!(windows) || edge.source == "hwpx"))
+        && (cfg!(windows) || crate::rhwp::available() || edge.source == "hwpx"))
         || (office && edge.engine_id == "hwp_documents" && edge.target == "hwpx")
-        || (cfg!(windows) && office && edge.engine_id == "rhwp" && edge.target == "hwp")
+        || ((cfg!(windows) || crate::rhwp::available())
+            && office
+            && edge.engine_id == "rhwp"
+            && edge.target == "hwp")
 }
 
 fn canonical(source: &str) -> Option<&'static str> {

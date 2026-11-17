@@ -11,10 +11,11 @@ pub(crate) type Check<'a> = &'a dyn Fn() -> io::Result<()>;
 
 fn executable() -> io::Result<PathBuf> {
     let current = std::env::current_exe()?;
+    let name = if cfg!(windows) { "rhwp.exe" } else { "rhwp" };
     current
         .ancestors()
         .skip(1)
-        .map(|root| root.join("vendor/rhwp/rhwp.exe"))
+        .map(|root| root.join("vendor/rhwp").join(name))
         .find(|path| path.is_file())
         .or_else(|| {
             std::env::var_os("MAGIC_CONVERTER_RHWP")
@@ -29,8 +30,12 @@ fn executable() -> io::Result<PathBuf> {
         })
 }
 
+pub(crate) fn available() -> bool {
+    cfg!(target_os = "macos") && executable().is_ok()
+}
+
 pub fn supports(edge: &Edge) -> bool {
-    cfg!(windows)
+    (cfg!(windows) || available())
         && matches!(
             (
                 edge.engine_id.as_str(),

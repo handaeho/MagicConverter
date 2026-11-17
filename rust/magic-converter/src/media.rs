@@ -106,8 +106,22 @@ impl Tools {
             .then(|| find(&configured))
             .flatten()
             .or_else(|| bundled("ffmpeg.exe"))
-            .or_else(|| find(OsStr::new("ffmpeg")))?;
-        let sibling = encoder.with_file_name("ffprobe.exe");
+            .or_else(|| find(OsStr::new("ffmpeg")))
+            .or_else(|| {
+                if cfg!(target_os = "macos") {
+                    ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
+                        .into_iter()
+                        .map(PathBuf::from)
+                        .find(|path| path.is_file())
+                } else {
+                    None
+                }
+            })?;
+        let sibling = encoder.with_file_name(if cfg!(windows) {
+            "ffprobe.exe"
+        } else {
+            "ffprobe"
+        });
         let probe = sibling
             .is_file()
             .then_some(sibling)

@@ -2,7 +2,7 @@
 
 탐색기에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
 
-[EXE로 시작하기](#exe로-시작하기) · [CLI로 시작하기](#cli로-시작하기)
+[EXE로 시작하기](#exe로-시작하기) · [macOS 설치](docs/user/MACOS.md) · [CLI로 시작하기](#cli로-시작하기)
 
 ## EXE로 시작하기
 

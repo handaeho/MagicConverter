@@ -1,0 +1,60 @@
+name: macOS build and verification
+on:
+  push:
+    branches: ['codex/macos-3.0.5']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      MAGIC_CONVERTER_PROFILE_DIR: ${{ runner.temp }}/magicconverter-profile
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Build macOS package
+        shell: bash
+        run: |
+          test "$(uname -m)" = "${{ matrix.arch }}"
+          rustup toolchain install 1.92.0 --profile minimal
+          export RUSTUP_TOOLCHAIN=1.92.0
+          bash packaging/macos/build.sh "$RUNNER_TEMP/release"
+      - name: Verify the extracted app
+        shell: bash
+        run: |
+          mkdir "$RUNNER_TEMP/extracted"
+          ditto -x -k "$RUNNER_TEMP/release/MagicConverter-3.0.5-macOS-${{ matrix.arch }}.zip" "$RUNNER_TEMP/extracted"
+          app="$RUNNER_TEMP/extracted/MagicConverter.app"
+          bin="$app/Contents/MacOS"
+          codesign --verify --deep --strict "$app"
+          "$bin/MagicConverter" --smoke-test
+          "$bin/magic_converter-cli" --version | grep '3\.0\.5$'
+          "$app/Contents/vendor/rhwp/rhwp" --version
+          printf 'test\n' | "$bin/magic_converter-cli" actions >/dev/null
+          python3 -m venv "$RUNNER_TEMP/python"
+          py="$RUNNER_TEMP/python/bin/python"
+          "$py" -m pip install --disable-pip-version-check 'pymupdf==1.28.2' python-docx pillow
+          "$py" tools/validation/verify_rust_pdf_pptx_layout.py --candidate "$bin/magic_converter-cli" --output "$RUNNER_TEMP/pdf-test"
+          "$py" tools/validation/verify_rust_word_photo_table.py --candidate "$bin/magic_converter-cli" --rhwp "$app/Contents/vendor/rhwp/rhwp" --output "$RUNNER_TEMP/word-test"
+          "$bin/magic_converter-cli" available -- "$RUNNER_TEMP/pdf-test/layout.pdf" | grep '"pptx_editable"'
+          printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' +            "$(uname -m)" > "$RUNNER_TEMP/release/verification-${{ matrix.arch }}.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: MagicConverter-macOS-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/release/*.zip
+            ${{ runner.temp }}/release/*.sha256
+            ${{ runner.temp }}/release/verification-*.txt

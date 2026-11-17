@@ -73,6 +73,8 @@ fn invalid(message: impl Into<String>) -> io::Error {
 fn library_path() -> io::Result<PathBuf> {
     let name = if cfg!(windows) {
         "pdfium.dll"
+    } else if cfg!(target_os = "macos") {
+        "libpdfium.dylib"
     } else {
         "libpdfium.so"
     };

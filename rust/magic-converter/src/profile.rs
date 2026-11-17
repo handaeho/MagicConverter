@@ -14,13 +14,23 @@ pub(crate) fn directory(common: &Common) -> io::Result<PathBuf> {
     {
         return Ok(directory);
     }
-    let Some(local) = env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
-        return Ok(PathBuf::from("magic-converter-profile"));
-    };
-    let legacy = local.join("magic_converter").join("magic_converter");
-    let current = local.join("MagicConverter").join("3.0").join("profile");
-    migrate(&legacy, &current)?;
-    Ok(current)
+    #[cfg(target_os = "macos")]
+    {
+        let home = env::var_os("HOME").ok_or_else(|| {
+            io::Error::new(ErrorKind::NotFound, "macOS 홈 폴더를 찾을 수 없습니다.")
+        })?;
+        Ok(PathBuf::from(home).join("Library/Application Support/MagicConverter/3.0/profile"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let Some(local) = env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
+            return Ok(PathBuf::from("magic-converter-profile"));
+        };
+        let legacy = local.join("magic_converter").join("magic_converter");
+        let current = local.join("MagicConverter").join("3.0").join("profile");
+        migrate(&legacy, &current)?;
+        Ok(current)
+    }
 }
 
 fn regular_file(path: &Path) -> io::Result<bool> {

@@ -161,6 +161,8 @@ fn engine() -> io::Result<&'static Engine> {
 fn library_path() -> io::Result<PathBuf> {
     let name = if cfg!(windows) {
         "libheif.dll"
+    } else if cfg!(target_os = "macos") {
+        "libheif.dylib"
     } else {
         "libheif.so"
     };
@@ -170,7 +172,23 @@ fn library_path() -> io::Result<PathBuf> {
     {
         return Ok(path);
     }
+    if cfg!(target_os = "macos") {
+        for library in [
+            "/opt/homebrew/lib/libheif.dylib",
+            "/usr/local/lib/libheif.dylib",
+        ] {
+            let path = PathBuf::from(library);
+            if path.is_file() {
+                return Ok(path);
+            }
+        }
+    }
     runtime_library(name)
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn available() -> bool {
+    engine().is_ok()
 }
 
 pub(super) fn runtime_library(name: &str) -> io::Result<PathBuf> {

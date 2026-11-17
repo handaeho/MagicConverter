@@ -75,6 +75,8 @@ struct Cli {
 enum Command {
     Formats(Common),
     Actions(Common),
+    #[cfg(target_os = "macos")]
+    Available(Available),
     Presets(Common),
     Convert(Convert),
     Watch(automation::watch::Watch),
@@ -128,6 +130,15 @@ struct Common {
     report: Option<PathBuf>,
     #[arg(long)]
     json: bool,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Args)]
+struct Available {
+    #[command(flatten)]
+    common: Common,
+    #[arg(required = true, num_args = 1..)]
+    paths: Vec<PathBuf>,
 }
 
 #[derive(Args, Clone)]
@@ -1219,6 +1230,40 @@ fn run(command: Command, catalog: &Catalog) -> Result<u8, Box<dyn std::error::Er
         }
         Command::Formats(common) => (json!({"ok": true, "formats": catalog.formats}), 0, common),
         Command::Actions(common) => (json!({"ok": true, "actions": catalog.actions}), 0, common),
+        #[cfg(target_os = "macos")]
+        Command::Available(input) => {
+            let settings = preferences(catalog, &input.common)?;
+            let ffmpeg =
+                media::Tools::discover(settings["ffmpeg_path"].as_str().unwrap_or_default());
+            let disabled = ffmpeg
+                .is_none()
+                .then(|| "ffmpeg".to_owned())
+                .into_iter()
+                .collect::<Vec<_>>();
+            let qt = qt_render::engine().is_some();
+            let actions: Vec<_> = catalog
+                .actions
+                .iter()
+                .filter(|action| {
+                    input.paths.iter().all(|path| {
+                        catalog
+                            .assess(path, &action.key, &disabled)
+                            .route
+                            .is_some_and(|route| {
+                                supports_steps(&route.steps, Some(path))
+                                    && route.steps.iter().all(|edge| {
+                                        qt || !(edge.target == "pdf"
+                                            && matches!(
+                                                edge.engine_id.as_str(),
+                                                "documents" | "spreadsheets"
+                                            ))
+                                    })
+                            })
+                    })
+                })
+                .collect();
+            (json!({"ok": true, "actions": actions}), 0, input.common)
+        }
         Command::Presets(common) => {
             let profile = preferences(catalog, &common)?;
             let presets = profile
