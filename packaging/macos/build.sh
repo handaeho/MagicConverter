@@ -69,7 +69,7 @@ install -m 644 vendor/rhwp/THIRD_PARTY_LICENSES.md "$bundle/Resources/Notices/rh
 cp docs/user/MACOS.md "$bundle/Resources/"
 
 for executable in "$bundle"/MacOS/* "$bundle/vendor/rhwp/rhwp" "$bundle/vendor/pdfium/libpdfium.dylib"; do
-  lipo -verify_arch "$arch" "$executable"
+  lipo "$executable" -verify_arch "$arch"
   codesign --force --sign - "$executable"
 done
 codesign --force --sign - "$app"
