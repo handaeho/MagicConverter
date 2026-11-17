@@ -1,4 +1,4 @@
-# MagicConverter 3.0.3 — Windows 파일 변환기
+# MagicConverter 3.0.4 — Windows 파일 변환기
 
 탐색기에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
 
@@ -6,7 +6,7 @@
 
 ## EXE로 시작하기
 
-[MagicConverter 3.0.3 Windows x64 설치 ZIP 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.3/MagicConverter-3.0.3-Windows-x64.zip)
+[MagicConverter 3.0.4 Windows x64 설치 ZIP 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.4/MagicConverter-3.0.4-Windows-x64.zip)
 
 Windows 10·11 x64용 Rust 앱입니다. <br>
 설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있어 인터넷 연결과 Python 없이 설치하고 사용할 수 있습니다.
@@ -21,7 +21,9 @@ Windows 10·11 x64용 Rust 앱입니다. <br>
 
 고급 설정에서는 목록과 선택 창에서 값을 고를 수 있습니다. 일반 설정과 고급 설정의 항목에 마우스를 올리면 한국어 도움말이 표시됩니다.
 
-[설치 및 업그레이드](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [3.0.3 변경 사항](docs/release/3.0.3.md) · [릴리스 목록](https://github.com/handaeho/MagicConverter/releases)
+DOCX를 HWPX로 변환할 때 긴 표가 다음 쪽으로 이어집니다. Word에서 반복하도록 지정한 제목 줄과 셀 안의 글자 위치도 보존합니다.
+
+[설치 및 업그레이드](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [3.0.4 변경 사항](docs/release/3.0.4.md) · [릴리스 목록](https://github.com/handaeho/MagicConverter/releases)
 
 일반 PNG 변환은 지원하는 EXIF 정보를 보존합니다. <br> 
 공유용 파일에서 작성자나 위치 등 메타데이터를 지우려면 도구 휠에서 **메타데이터 제거**를 선택하세요.

@@ -151,12 +151,14 @@ fn cell_margins(item: Option<ElementRef<'_>>) -> [i32; 4] {
 
 // HWPX stores a concrete cell height. For auto and minimum Word rows,
 // reserve space for wrapped paragraphs before centering content in the cell.
-fn word_cell_height(cell: ElementRef<'_>, width: i32) -> i32 {
+fn word_cell_layout(cell: ElementRef<'_>, width: i32) -> (i32, Option<(i32, i32)>) {
     use unicode_properties::{GeneralCategoryGroup, UnicodeGeneralCategory};
 
     let [top, left, bottom, right] = cell_margins(Some(cell));
     let available = (width - left - right).max(100);
     let mut total = top + bottom;
+    let mut fixed_leading = None;
+    let single_paragraph = cell.child_elements().count() == 1;
     for paragraph in cell
         .child_elements()
         .filter(|item| item.value().name() == "p")
@@ -168,26 +170,51 @@ fn word_cell_height(cell: ElementRef<'_>, width: i32) -> i32 {
         let width = (available - left - right).max(100);
         let mut remaining = (width - first).max(100);
         let mut font_height = 0;
+        let mut picture_height = 0;
         let mut used = false;
+        let mark_size = (dimension(paragraph, "data-mark-size", 10.0) * 100.0)
+            .round_ties_even()
+            .clamp(100.0, 100_000.0) as i32;
         let line_height = |size: i32| match (spacing, paragraph.attr("data-rule")) {
             (0, _) => size * 8 / 5,
             (_, Some("exact" | "atLeast")) => size.max(spacing * 5),
             _ => (size * spacing.min(2_400) / 240).max(size * 6 / 5),
         };
-        let mut new_line = |size: i32| {
-            total = total.saturating_add(line_height(if size == 0 { 1000 } else { size }));
+        let mut lines = 0;
+        let mut new_line = |size: i32, picture: i32| {
+            let text = if size != 0 {
+                line_height(size)
+            } else if picture > 0 {
+                0
+            } else {
+                line_height(mark_size)
+            };
+            lines += 1;
+            total = total.saturating_add(text.max(picture));
         };
         for child in paragraph.descendants().skip(1) {
             if let Some(element) = ElementRef::wrap(child) {
                 if element.value().name() == "br" {
-                    new_line(font_height);
+                    new_line(font_height, picture_height);
                     remaining = width;
                     font_height = 0;
+                    picture_height = 0;
                     used = false;
                 } else if element.value().name() == "img" {
-                    let height = (dimension(element, "data-height", 10.0) * 100.0)
-                        .clamp(100.0, 500_000.0) as i32;
-                    font_height = font_height.max(height);
+                    let image_width = (dimension(element, "data-width", 10.0) * 100.0).max(1.0);
+                    let scale = (f64::from(available) / image_width).min(1.0);
+                    let image_width = (image_width * scale).round_ties_even() as i32;
+                    let height = (dimension(element, "data-height", 10.0) * 100.0 * scale)
+                        .round_ties_even()
+                        .clamp(1.0, 500_000.0) as i32;
+                    if used && image_width > remaining {
+                        new_line(font_height, picture_height);
+                        remaining = width;
+                        font_height = 0;
+                        picture_height = 0;
+                    }
+                    remaining = remaining.saturating_sub(image_width);
+                    picture_height = picture_height.max(height);
                     used = true;
                 }
                 continue;
@@ -221,34 +248,52 @@ fn word_cell_height(cell: ElementRef<'_>, width: i32) -> i32 {
                 let word = body.trim_end();
                 let word_width = word.chars().map(advance).fold(0_i32, i32::saturating_add);
                 if used && word.is_ascii() && word_width <= width && word_width > remaining {
-                    new_line(font_height);
+                    new_line(font_height, picture_height);
                     remaining = width;
                     font_height = 0;
+                    picture_height = 0;
                     used = false;
                 }
                 for ch in body.chars() {
                     let advance = advance(ch);
                     if used && !ch.is_whitespace() && advance > remaining {
-                        new_line(font_height);
+                        new_line(font_height, picture_height);
                         remaining = width;
                         font_height = 0;
+                        picture_height = 0;
                     }
                     remaining = remaining.saturating_sub(advance);
                     font_height = font_height.max(style.size);
                     used = true;
                 }
                 if token.ends_with('\n') {
-                    new_line(font_height.max(style.size));
+                    new_line(font_height.max(style.size), picture_height);
                     remaining = width;
                     font_height = 0;
+                    picture_height = 0;
                     used = false;
                 }
             }
         }
-        new_line(font_height);
+        new_line(font_height, picture_height);
+        // Word centers text inside a fixed (or minimum) line box. HWP puts
+        // the extra leading below the text. For a short text label, move half
+        // of that leading above the text within the existing cell height.
+        if single_paragraph
+            && lines == 1
+            && font_height > 0
+            && picture_height == 0
+            && cell.attr("data-valign") == Some("top")
+            && matches!(paragraph.attr("data-rule"), Some("exact" | "atLeast"))
+        {
+            let leading = (spacing * 5 - font_height) / 2;
+            if leading > 0 {
+                fixed_leading = Some((leading, font_height));
+            }
+        }
         total = total.saturating_add((before + after) * 5);
     }
-    total.max(top + bottom + 1000)
+    (total.max(top + bottom + 1000), fixed_leading)
 }
 
 #[cfg(test)]
@@ -264,9 +309,9 @@ mod row_height_tests {
             .select(&scraper::Selector::parse("td").unwrap())
             .next()
             .unwrap();
-        let wide = word_cell_height(cell, 20_000);
+        let wide = word_cell_layout(cell, 20_000).0;
         assert!(wide >= 3_800);
-        assert!(word_cell_height(cell, 4_000) > wide);
+        assert!(word_cell_layout(cell, 4_000).0 > wide);
     }
 }
 
@@ -839,7 +884,14 @@ impl Writer<'_> {
                     let start = output.len();
                     self.inline(output, *child, &RunStyle::default(), available, 0)?;
                     if start == output.len() {
-                        self.text(output, "", &RunStyle::default().with(child))?;
+                        let mut style = RunStyle::default().with(child);
+                        if child.attr("data-mark-size").is_some() {
+                            style.size = (dimension(child, "data-mark-size", 10.0) * 100.0)
+                                .round_ties_even()
+                                .clamp(100.0, 100_000.0)
+                                as i32;
+                        }
+                        self.text(output, "", &style)?;
                     }
                     output.push_str("</hp:p>");
                     self.preview.push('\n');
@@ -869,6 +921,14 @@ impl Writer<'_> {
         if grid.columns == 0 {
             return Ok(());
         }
+        let word_table = table.attr("data-word-table") == Some("1");
+        let indent = if word_table && !matches!(table.attr("align"), Some("center" | "right")) {
+            numbers(table.attr("data-table-indent"), [0])[0].clamp(0, (available - 100).max(0) / 5)
+                * 5
+        } else {
+            0
+        };
+        let available = available - indent;
         let widths = values(table.attr("data-columns"));
         let mut widths: Vec<_> = if widths.len() == grid.columns {
             widths
@@ -883,7 +943,20 @@ impl Writer<'_> {
         widths.iter_mut().for_each(|width| {
             *width = (f64::from(*width) * scale).round_ties_even().max(1.0) as i32
         });
-        let word_table = table.attr("data-word-table") == Some("1");
+        // Hancom ignores pageBreak on tables treated as one inline character.
+        // Body tables can flow across pages; embedded tables still belong to
+        // their own cell or header/footer.
+        let flow = word_table
+            && table
+                .ancestors()
+                .filter_map(ElementRef::wrap)
+                .all(|item| !matches!(item.value().name(), "td" | "th" | "header" | "footer"));
+        let header_rows = table
+            .attr("data-header-rows")
+            .and_then(|rows| rows.parse::<usize>().ok())
+            .unwrap_or(0)
+            .min(grid.rows);
+        let repeat_header = u8::from(!word_table || header_rows > 0);
         let mut heights: Vec<_> = grid
             .heights
             .iter()
@@ -897,6 +970,7 @@ impl Writer<'_> {
                 }
             })
             .collect();
+        let mut fixed_leading = HashMap::new();
         if word_table {
             for (&(row, _), &(item, _, _)) in &grid.cells {
                 if grid.exact_heights[row] {
@@ -912,13 +986,16 @@ impl Writer<'_> {
                         continue;
                     };
                     (self.check)()?;
+                    let width = widths[col..col + columns].iter().sum();
+                    let (needed, leading) = word_cell_layout(cell, width);
+                    if let Some(leading) = leading {
+                        fixed_leading.insert((row, col), leading);
+                    }
                     let expandable = (row..row + rows).filter(|&r| !grid.exact_heights[r]);
                     let count = expandable.clone().count() as i32;
                     if count == 0 {
                         continue;
                     }
-                    let width = widths[col..col + columns].iter().sum();
-                    let needed = word_cell_height(cell, width);
                     let height = heights[row..row + rows]
                         .iter()
                         .copied()
@@ -939,9 +1016,20 @@ impl Writer<'_> {
         self.paragraph(output, Some(table))?;
         self.text(output, "", &RunStyle::default())?;
         let id = self.id()? + 1_500_000;
-        write!(output, r#"<hp:run charPrIDRef="0"><hp:tbl id="{id}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" rowCnt="{}" colCnt="{}" cellSpacing="0" borderFillIDRef="3" noAdjust="0">"#, grid.rows, grid.columns).unwrap();
+        write!(output, r#"<hp:run charPrIDRef="0"><hp:tbl id="{id}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="{repeat_header}" rowCnt="{}" colCnt="{}" cellSpacing="0" borderFillIDRef="3" noAdjust="0">"#, grid.rows, grid.columns).unwrap();
         table_size(output, widths.iter().sum(), sum_heights(0..grid.rows));
-        write!(output, r#"{POSITION}<hp:outMargin left="0" right="0" top="283" bottom="283"/><hp:inMargin left="283" right="283" top="141" bottom="141"/>"#).unwrap();
+        if flow {
+            let align = match table.attr("align") {
+                Some("center") => "CENTER",
+                Some("right") => "RIGHT",
+                _ => "LEFT",
+            };
+            write!(output, r#"<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="{align}" vertOffset="0" horzOffset="{indent}"/>"#).unwrap();
+        } else {
+            output.push_str(POSITION);
+        }
+        let margin = if word_table { 0 } else { 283 };
+        write!(output, r#"<hp:outMargin left="0" right="0" top="{margin}" bottom="{margin}"/><hp:inMargin left="283" right="283" top="141" bottom="141"/>"#).unwrap();
         let mut active = vec![0; grid.columns];
         for r in 0..grid.rows {
             (self.check)()?;
@@ -974,7 +1062,10 @@ impl Writer<'_> {
                     })
                     .unwrap_or(3);
                 let explicit = item.and_then(|cell| cell.attr("data-margins"));
-                let [top, left, bottom, right] = cell_margins(item);
+                let [mut top, left, bottom, right] = cell_margins(item);
+                if let Some(&(leading, font_height)) = fixed_leading.get(&(r, c)) {
+                    top += leading.min((height - top - bottom - font_height).max(0));
+                }
                 let alignment = match item.and_then(|cell| cell.attr("data-valign")) {
                     Some("top") => "TOP",
                     Some("bottom") => "BOTTOM",
@@ -984,7 +1075,8 @@ impl Writer<'_> {
                     r#"vertAlign="CENTER""#,
                     &format!(r#"vertAlign="{alignment}""#),
                 );
-                write!(output, r#"<hp:tc name="" header="0" hasMargin="{}" protect="0" editable="0" dirty="0" borderFillIDRef="{border}">{list}"#, u8::from(explicit.is_some())).unwrap();
+                let header = u8::from(r + rs <= header_rows);
+                write!(output, r#"<hp:tc name="" header="{header}" hasMargin="{}" protect="0" editable="0" dirty="0" borderFillIDRef="{border}">{list}"#, u8::from(explicit.is_some())).unwrap();
                 if let Some(cell) = item {
                     self.blocks(output, cell, (width - left - right).max(100), depth)?;
                 } else {

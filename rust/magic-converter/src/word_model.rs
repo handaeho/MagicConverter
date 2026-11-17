@@ -324,6 +324,7 @@ struct Styles<'a, 'input> {
     entries: HashMap<&'a str, Node<'a, 'input>>,
     defaults: HashMap<&'a str, &'a str>,
     document: Option<Node<'a, 'input>>,
+    document_paragraph: Option<Node<'a, 'input>>,
 }
 
 impl<'a, 'input> Styles<'a, 'input> {
@@ -344,6 +345,7 @@ impl<'a, 'input> Styles<'a, 'input> {
             }
         }
         styles.document = path(root, &["docDefaults", "rPrDefault", "rPr"]);
+        styles.document_paragraph = path(root, &["docDefaults", "pPrDefault", "pPr"]);
         styles
     }
 
@@ -680,7 +682,11 @@ impl Renderer<'_, '_, '_> {
         let pr = node(paragraph, "pPr");
         let paragraph_style = val(pr.and_then(|props| node(props, "pStyle")));
         let styles = self.styles.chain(paragraph_style, "paragraph", "pPr");
-        let properties = || pr.into_iter().chain(styles.iter().copied());
+        let properties = || {
+            pr.into_iter()
+                .chain(styles.iter().copied())
+                .chain(self.styles.document_paragraph)
+        };
         let alignment = properties()
             .find_map(|properties| val(node(properties, "jc")))
             .unwrap_or("left");
@@ -706,15 +712,31 @@ impl Renderer<'_, '_, '_> {
                 let indent = number("ind", "firstLine").saturating_sub(number("ind", "hanging"));
                 let before = number("spacing", "before");
                 let after = number("spacing", "after");
-                let line = number("spacing", "line");
+                let line = property("spacing", "line")
+                    .and_then(|value| value.parse::<i32>().ok())
+                    // An unspecified Word line is a single typographic line.
+                    // Approximate its font metrics rather than using HWP's 160% default.
+                    .unwrap_or(288);
                 let rule = property("spacing", "lineRule")
                     .filter(|rule| matches!(*rule, "exact" | "atLeast"))
                     .unwrap_or("auto");
+                let mark_size = val(path(paragraph, &["pPr", "rPr", "sz"]))
+                    .or_else(|| {
+                        self.styles
+                            .chain(paragraph_style, "paragraph", "rPr")
+                            .into_iter()
+                            .chain(self.styles.document)
+                            .find_map(|props| val(node(props, "sz")))
+                    })
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .filter(|&v| v > 0)
+                    .unwrap_or(20);
                 let page = pr
                     .and_then(|node_| node(node_, "pageBreakBefore"))
                     .is_some_and(|node| !matches!(attr(node, "val"), Some("0" | "false" | "off")));
                 format!(
-                    r#" data-indent="{left} {right} {indent}" data-space="{before} {after} {line}" data-rule="{rule}" data-page="{}""#,
+                    r#" data-indent="{left} {right} {indent}" data-space="{before} {after} {line}" data-rule="{rule}" data-mark-size="{}" data-page="{}""#,
+                    f64::from(mark_size) / 2.0,
                     u8::from(page)
                 )
             } else {
@@ -779,7 +801,7 @@ impl Renderer<'_, '_, '_> {
             .collect();
         let table_properties = node(table, "tblPr");
         let mut table_styles = Vec::new();
-        let mut inherited_alignment = None;
+        let mut cell_styles = std::collections::HashMap::new();
         table_styles.extend(table_properties);
         let mut style = val(table_properties.and_then(|props| node(props, "tblStyle")))
             .or_else(|| self.styles.defaults.get("table").copied());
@@ -788,22 +810,53 @@ impl Renderer<'_, '_, '_> {
                 break;
             };
             table_styles.extend(node(*entry, "tblPr"));
-            inherited_alignment = inherited_alignment
-                .or_else(|| {
-                    entry
-                        .children()
-                        .find(|item| {
-                            item.has_tag_name((WORD, "tblStylePr"))
-                                && attr(*item, "type") == Some("wholeTable")
-                        })
-                        .and_then(|item| val(path(item, &["tcPr", "vAlign"])))
-                })
-                .or_else(|| val(path(*entry, &["tcPr", "vAlign"])));
+            for part in entry
+                .children()
+                .filter(|item| item.has_tag_name((WORD, "tblStylePr")))
+            {
+                if let (Some(kind), Some(align)) =
+                    (attr(part, "type"), val(path(part, &["tcPr", "vAlign"])))
+                {
+                    cell_styles.entry(kind).or_insert(align);
+                }
+            }
+            if let Some(align) = val(path(*entry, &["tcPr", "vAlign"])) {
+                cell_styles.entry("wholeTable").or_insert(align);
+            }
             style = val(node(*entry, "basedOn"));
         }
         let table_property = |key| table_styles.iter().find_map(|item| node(*item, key));
         let borders = table_property("tblBorders");
         let margins = table_property("tblCellMar");
+        let look = table_property("tblLook");
+        let look_mask = val(look)
+            .and_then(|v| u16::from_str_radix(v, 16).ok())
+            .unwrap_or(0);
+        let has_look = |name, bit| {
+            look.and_then(|item| attr(item, name))
+                .map_or(look_mask & bit != 0, |v| matches!(v, "1" | "true" | "on"))
+        };
+        let first_row = has_look("firstRow", 0x0020);
+        let last_row = has_look("lastRow", 0x0040);
+        let first_col = has_look("firstColumn", 0x0080);
+        let last_col = has_look("lastColumn", 0x0100);
+        let h_band = !has_look("noHBand", 0x0200);
+        let v_band = !has_look("noVBand", 0x0400);
+        let band_size = |property| {
+            val(table_property(property))
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(1)
+                .max(1)
+        };
+        let row_band = band_size("tblStyleRowBandSize");
+        let col_band = band_size("tblStyleColBandSize");
+        let headers = rows
+            .iter()
+            .take_while(|&&row| {
+                path(row, &["trPr", "tblHeader"])
+                    .is_some_and(|n| !matches!(attr(n, "val"), Some("0" | "false" | "off")))
+            })
+            .count();
         if self.html {
             let layout = if self.layout {
                 let widths = widths
@@ -811,10 +864,17 @@ impl Renderer<'_, '_, '_> {
                     .map(|width| ((width * 20.0).round_ties_even() as i64).to_string())
                     .collect::<Vec<_>>()
                     .join(" ");
-                let align = val(table_properties.and_then(|props| node(props, "jc")))
+                let align = val(table_property("jc"))
                     .filter(|align| matches!(*align, "left" | "center" | "right"));
                 let align = align.map_or_else(String::new, |align| format!(r#" align="{align}""#));
-                format!(r#" data-columns="{widths}" data-word-table="1"{align}"#)
+                let indent = table_property("tblInd")
+                    .filter(|item| matches!(attr(*item, "type"), None | Some("dxa")))
+                    .and_then(|item| attr(item, "w"))
+                    .and_then(|v| v.parse::<i32>().ok())
+                    .unwrap_or(0);
+                format!(
+                    r#" data-columns="{widths}" data-word-table="1" data-header-rows="{headers}" data-table-indent="{indent}"{align}"#
+                )
             } else {
                 String::new()
             };
@@ -889,8 +949,41 @@ impl Renderer<'_, '_, '_> {
                         let props = node(cell, "tcPr");
                         let local_border = props.and_then(|item| node(item, "tcBorders"));
                         let local_margin = props.and_then(|item| node(item, "tcMar"));
+                        let first = first_row && index == 0;
+                        let last = last_row && index + 1 == rows.len();
+                        let left = first_col && start == 0;
+                        let right = last_col && column == widths.len();
+                        let row_band =
+                            (index.saturating_sub(usize::from(first_row)) / row_band) % 2;
+                        let col_band =
+                            (start.saturating_sub(usize::from(first_col)) / col_band) % 2;
+                        // Word applies table regions in increasing priority, then direct cell formatting.
                         let vertical = val(props.and_then(|item| node(item, "vAlign")))
-                            .or(inherited_alignment)
+                            .or_else(|| {
+                                [
+                                    (first && left, "nwCell"),
+                                    (first && right, "neCell"),
+                                    (first, "firstRow"),
+                                    (last && left, "swCell"),
+                                    (last && right, "seCell"),
+                                    (last, "lastRow"),
+                                    (left, "firstCol"),
+                                    (right, "lastCol"),
+                                    (v_band && !left && !right && col_band == 1, "band2Vert"),
+                                    (v_band && !left && !right && col_band == 0, "band1Vert"),
+                                    (h_band && !first && !last && row_band == 1, "band2Horz"),
+                                    (h_band && !first && !last && row_band == 0, "band1Horz"),
+                                    (true, "wholeTable"),
+                                ]
+                                .into_iter()
+                                .find_map(|(active, name)| {
+                                    if active {
+                                        cell_styles.get(name).copied()
+                                    } else {
+                                        None
+                                    }
+                                })
+                            })
                             .filter(|value| matches!(*value, "center" | "bottom"))
                             .unwrap_or("top");
                         let mut values = String::new();
