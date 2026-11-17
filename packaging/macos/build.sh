@@ -56,11 +56,10 @@ rhwp_bin="$(find "$work/rhwp" -type f -name rhwp -print)"
 test -f "$rhwp_bin"
 install -m 755 "$rhwp_bin" "$bundle/vendor/rhwp/rhwp"
 mkdir "$bundle/Resources/Notices/PDFium" "$bundle/Resources/Notices/rhwp"
-find "$work/pdfium" -type f \( -iname '*license*' -o -iname '*notice*' \) \
-  -exec cp {} "$bundle/Resources/Notices/PDFium/" \;
+install -m 644 "$work/pdfium/LICENSE" "$bundle/Resources/Notices/PDFium/LICENSE"
+cp -R "$work/pdfium/licenses" "$bundle/Resources/Notices/PDFium/"
 find "$work/rhwp" -type f \( -iname '*license*' -o -iname '*notice*' \) \
   -exec cp {} "$bundle/Resources/Notices/rhwp/" \;
-test "$(find "$bundle/Resources/Notices/PDFium" -type f | wc -l)" -gt 0
 if [ -z "$(find "$bundle/Resources/Notices/rhwp" -type f -print -quit)" ]; then
   curl --proto '=https' --tlsv1.2 -fLsS --retry 3 \
     'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/LICENSE' \

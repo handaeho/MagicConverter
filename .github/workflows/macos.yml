@@ -18,7 +18,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:
-      MAGIC_CONVERTER_PROFILE_DIR: ${{ runner.temp }}/magicconverter-profile
       CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -34,6 +33,7 @@ jobs:
       - name: Verify the extracted app
         shell: bash
         run: |
+          export MAGIC_CONVERTER_PROFILE_DIR="$RUNNER_TEMP/magicconverter-profile"
           mkdir "$RUNNER_TEMP/extracted"
           ditto -x -k "$RUNNER_TEMP/release/MagicConverter-3.0.5-macOS-${{ matrix.arch }}.zip" "$RUNNER_TEMP/extracted"
           app="$RUNNER_TEMP/extracted/MagicConverter.app"
@@ -42,7 +42,7 @@ jobs:
           "$bin/MagicConverter" --smoke-test
           "$bin/magic_converter-cli" --version | grep '3\.0\.5$'
           "$app/Contents/vendor/rhwp/rhwp" --version
-          printf 'test\n' | "$bin/magic_converter-cli" actions >/dev/null
+          "$bin/magic_converter-cli" actions >/dev/null
           python3 -m venv "$RUNNER_TEMP/python"
           py="$RUNNER_TEMP/python/bin/python"
           "$py" -m pip install --disable-pip-version-check 'pymupdf==1.28.2' python-docx pillow
