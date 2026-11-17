@@ -1,6 +1,6 @@
 # MagicConverter 3.0.5 — Windows 파일 변환기
 
-탐색기에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows 앱입니다.
+탐색기나 Finder에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows·macOS 앱입니다.
 
 [EXE로 시작하기](#exe로-시작하기) · [macOS 설치](docs/user/MACOS.md) · [CLI로 시작하기](#cli로-시작하기)
 
@@ -29,6 +29,12 @@ PDF → PPTX의 **편집 복원**은 흐름도 라벨을 원래 위치에 유지
 
 일반 PNG 변환은 지원하는 EXIF 정보를 보존합니다. <br> 
 공유용 파일에서 작성자나 위치 등 메타데이터를 지우려면 도구 휠에서 **메타데이터 제거**를 선택하세요.
+
+## macOS로 시작하기
+
+macOS 15 이상을 지원합니다. Mac의 칩에 맞는 ZIP을 풀어 `MagicConverter.app`을 **응용 프로그램**으로 옮기세요.
+
+[Apple Silicon 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/MagicConverter-3.0.5-macOS-arm64.zip) · [Intel 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/MagicConverter-3.0.5-macOS-x86_64.zip) · [설치 및 지원 범위](docs/user/MACOS.md)
 
 ## CLI로 시작하기
 

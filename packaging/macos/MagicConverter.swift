@@ -293,7 +293,7 @@ private final class App: NSObject, NSApplicationDelegate {
 }
 
 let application = NSApplication.shared
-let delegate = App()
+private let delegate = App()
 application.delegate = delegate
 application.setActivationPolicy(.regular)
 application.run()

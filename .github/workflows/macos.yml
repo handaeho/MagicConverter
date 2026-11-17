@@ -49,7 +49,8 @@ jobs:
           "$py" tools/validation/verify_rust_pdf_pptx_layout.py --candidate "$bin/magic_converter-cli" --output "$RUNNER_TEMP/pdf-test"
           "$py" tools/validation/verify_rust_word_photo_table.py --candidate "$bin/magic_converter-cli" --rhwp "$app/Contents/vendor/rhwp/rhwp" --output "$RUNNER_TEMP/word-test"
           "$bin/magic_converter-cli" available -- "$RUNNER_TEMP/pdf-test/layout.pdf" | grep '"pptx_editable"'
-          printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' +            "$(uname -m)" > "$RUNNER_TEMP/release/verification-${{ matrix.arch }}.txt"
+          printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' \
+            "$(uname -m)" > "$RUNNER_TEMP/release/verification-${{ matrix.arch }}.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: MagicConverter-macOS-${{ matrix.arch }}

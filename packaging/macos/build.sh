@@ -34,11 +34,11 @@ bundle="$app/Contents"
 mkdir -p "$bundle/MacOS" "$bundle/Resources/Notices" "$bundle/vendor/pdfium" "$bundle/vendor/rhwp"
 export MACOSX_DEPLOYMENT_TARGET=15.0
 
-cargo test --locked --target "$triple" --target-dir "$target" --manifest-path rust/magic-converter/Cargo.toml --lib
+xcrun swiftc -swift-version 5 -O -target "$arch-apple-macosx15.0" packaging/macos/MagicConverter.swift -o "$bundle/MacOS/MagicConverter"
+cargo test --locked --release --target "$triple" --target-dir "$target" --manifest-path rust/magic-converter/Cargo.toml --lib
 cargo build --locked --release --target "$triple" --target-dir "$target" --manifest-path rust/magic-converter/Cargo.toml --bin magic-converter-rust --bin magic_converter_mcp
 install -m 755 "$target/$triple/release/magic-converter-rust" "$bundle/MacOS/magic_converter-cli"
 install -m 755 "$target/$triple/release/magic_converter_mcp" "$bundle/MacOS/magic_converter-mcp"
-xcrun swiftc -swift-version 5 -O -target "$arch-apple-macosx15.0" packaging/macos/MagicConverter.swift -o "$bundle/MacOS/MagicConverter"
 install -m 644 packaging/macos/Info.plist "$bundle/Info.plist"
 install -m 644 LICENSE "$bundle/Resources/Notices/LICENSE-MagicConverter"
 
@@ -65,6 +65,7 @@ if [ -z "$(find "$bundle/Resources/Notices/rhwp" -type f -print -quit)" ]; then
     'https://raw.githubusercontent.com/edwardkim/rhwp/v0.8.7/LICENSE' \
     -o "$bundle/Resources/Notices/rhwp/LICENSE"
 fi
+install -m 644 vendor/rhwp/THIRD_PARTY_LICENSES.md "$bundle/Resources/Notices/rhwp/THIRD_PARTY_LICENSES.md"
 cp docs/user/MACOS.md "$bundle/Resources/"
 
 for executable in "$bundle"/MacOS/* "$bundle/vendor/rhwp/rhwp" "$bundle/vendor/pdfium/libpdfium.dylib"; do
