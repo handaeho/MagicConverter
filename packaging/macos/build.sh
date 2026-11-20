@@ -109,7 +109,22 @@ ditto -c -k --sequesterRsrc --keepParent "$app" "$out/$name"
 
 mkdir -p "$work/installer/Applications" "$work/installer-resources"
 ditto "$app" "$work/installer/Applications/MagicConverter.app"
+pkgbuild --analyze --root "$work/installer" "$work/components.plist"
+python3 - "$work/components.plist" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+components = plistlib.loads(path.read_bytes())
+for component in components:
+    # Otherwise Installer can find the ZIP test copy (or a Downloads copy) and
+    # update it there instead of installing into the selected Applications folder.
+    component['BundleIsRelocatable'] = False
+    component['BundleOverwriteAction'] = 'upgrade'
+path.write_bytes(plistlib.dumps(components))
+PY
 pkgbuild --root "$work/installer" --identifier com.handaeho.magicconverter \
+  --component-plist "$work/components.plist" \
   --version 3.0.5.2 --install-location / "$work/MagicConverter-component.pkg"
 cp LICENSE "$work/installer-resources/License.txt"
 cp packaging/macos/Welcome.txt "$work/installer-resources/Welcome.txt"
