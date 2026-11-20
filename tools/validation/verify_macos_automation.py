@@ -92,6 +92,16 @@ def main():
     second = call(*arguments)
     assert second["ok"] and not second["jobs"], second
     assert sorted(path.name for path in destination.iterdir()) == before
+    # Positive companions to the canonical suite's non-tabular data rejections.
+    for suffix, text in [("json", '[{"이름":"첫째","value":2}]'),
+                         ("yaml", '- 이름: 첫째\n  value: 2\n'),
+                         ("xml", '<magic-data version="1">[{"이름":"첫째","value":2}]</magic-data>')]:
+        source = root / ("table." + suffix)
+        source.write_text(text, encoding="utf8")
+        for target in ("jsonl", "csv", "tsv"):
+            result = call("convert", "--data-dir", root / "data-profile", "--action", "data:" + target,
+                          "--output", output, "--", source)
+            assert result["ok"], result
     print("IPC submission, idempotent replay, crash/restart, history, stop, and watch replay passed.")
 
 

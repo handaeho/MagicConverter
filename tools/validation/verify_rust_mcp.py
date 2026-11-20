@@ -2,6 +2,8 @@
 
 import argparse
 import json
+import hashlib
+import os
 from pathlib import Path
 from queue import Queue
 import subprocess
@@ -11,7 +13,26 @@ from time import perf_counter, sleep
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from tools.validation.verify_rust_full_parity import digest, native_environment, run
+
+def digest(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def native_environment():
+    environment = os.environ.copy()
+    environment["PATH"] = (str(Path(environment.get("SYSTEMROOT", "C:/Windows")) / "System32")
+                           if os.name == "nt" else "/usr/bin:/bin:/usr/sbin:/sbin")
+    for key in ("MAGIC_CONVERTER_PROFILE_DIR", "MAGIC_CONVERTER_FFMPEG", "VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME",
+                "QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH"):
+        environment.pop(key, None)
+    return environment
+
+
+def run(prefix, arguments, *, environment=None):
+    process = subprocess.run([*prefix, *map(str, arguments)], capture_output=True, env=environment, timeout=180,
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return process.returncode, json.loads(process.stdout)
 
 
 def main():
