@@ -67,6 +67,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/python"
           py="$RUNNER_TEMP/python/bin/python"
           "$py" -m pip install --disable-pip-version-check 'pymupdf==1.28.2' python-docx pillow pillow-heif
+          "$py" tools/validation/verify_macos_office.py --office "$app/Contents/vendor/office/LibreOffice.app/Contents/MacOS/soffice" --worker "$bin/magic_converter-cli" --output "$RUNNER_TEMP/office-check"
+          cp "$RUNNER_TEMP/office-check/report.json" "$RUNNER_TEMP/release/office-${{ matrix.arch }}.json"
           "$py" tools/validation/verify_rust_pdf_pptx_layout.py --candidate "$bin/magic_converter-cli" --output "$RUNNER_TEMP/pdf-test"
           "$py" tools/validation/verify_rust_word_photo_table.py --candidate "$bin/magic_converter-cli" --rhwp "$app/Contents/vendor/rhwp/rhwp" --output "$RUNNER_TEMP/word-test"
           "$bin/magic_converter-cli" available -- "$RUNNER_TEMP/pdf-test/layout.pdf" | grep '"pptx_editable"'
@@ -106,8 +108,8 @@ jobs:
           # Exercise the actual Installer package and the app's native removal menu.
           osascript -e 'tell application id "com.handaeho.magicconverter" to quit'
           sleep 2
-          sudo installer -pkg "$RUNNER_TEMP/release/MagicConverter-3.0.5-macOS-${{ matrix.arch }}.pkg" -target /
-          installed="/Applications/MagicConverter.app"
+          installer -pkg "$RUNNER_TEMP/release/MagicConverter-3.0.5-macOS-${{ matrix.arch }}.pkg" -target CurrentUserHomeDirectory
+          installed="$HOME/Applications/MagicConverter.app"
           codesign --verify --deep --strict "$installed"
           /usr/bin/open -n -a "$installed"
           "$RUNNER_TEMP/check-window" "$installed" --keep-running

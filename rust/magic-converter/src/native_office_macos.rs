@@ -30,16 +30,21 @@ pub fn supports(edge: &Edge) -> bool {
 pub fn convert(
     source: &Path,
     target: &Path,
-    _: &Edge,
+    edge: &Edge,
     check: &dyn Fn() -> io::Result<()>,
     warnings: &mut Vec<String>,
 ) -> io::Result<()> {
-    let renderer = [
+    let bundled = std::env::current_exe().ok().and_then(|executable| {
+        executable.ancestors().skip(1).map(|root| {
+            root.join("vendor/office/LibreOffice.app/Contents/MacOS/soffice")
+        }).find(|path| path.is_file())
+    });
+    let needs_office = edge.source == "ppt" || edge.action_key == "office:xlsx_print_pdf";
+    let renderer = bundled.filter(|_| needs_office).into_iter().chain([
         PathBuf::from("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
         PathBuf::from("/usr/local/bin/soffice"),
         PathBuf::from("/opt/homebrew/bin/soffice"),
-    ]
-    .into_iter()
+    ])
     .find(|path| path.is_file())
     .ok_or_else(|| {
         io::Error::new(
@@ -71,6 +76,6 @@ pub fn convert(
     let output = generated.join(format!("{}.pdf", stem.to_string_lossy()));
     crate::pdfium::page_count(&output, check)?;
     std::fs::copy(output, target)?;
-    warnings.push("설치된 LibreOffice로 PDF를 출력했습니다.".to_owned());
+    warnings.push("LibreOffice 인쇄 엔진으로 PDF를 출력했습니다.".to_owned());
     Ok(())
 }

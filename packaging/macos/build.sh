@@ -87,6 +87,7 @@ cp docs/user/MACOS.md "$bundle/Resources/"
 
 if [ "${MAGIC_CONVERTER_FULL_RUNTIME:-0}" = 1 ]; then
   bash packaging/macos/runtime.sh "$app" "$work"
+  bash packaging/macos/office.sh "$app" "$work"
 fi
 python3 - "$bundle" "$arch" <<'PY'
 from pathlib import Path
@@ -98,7 +99,8 @@ for path in Path(sys.argv[1]).rglob('*'):
             magic = stream.read(4)
         if magic in (b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xca\xfe\xba\xbe'):
             subprocess.run(['lipo', path, '-verify_arch', sys.argv[2]], check=True)
-            subprocess.run(['codesign', '--force', '--sign', '-', path], check=True)
+            if 'LibreOffice.app' not in path.parts:
+                subprocess.run(['codesign', '--force', '--sign', '-', path], check=True)
 PY
 codesign --force --sign - "$app"
 codesign --verify --deep --strict "$app"
