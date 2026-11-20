@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import WebKit
 
 private final class SourceView: NSView, NSDraggingSource {
     let file: URL
@@ -57,6 +58,7 @@ let arguments = CommandLine.arguments
 let file = URL(fileURLWithPath: arguments[1])
 let quick = arguments[2] == "control"
 let finder = arguments.contains("--finder")
+let browser = arguments.contains("--web")
 let resultPath = URL(fileURLWithPath: arguments[3])
 let cli = Process()
 cli.executableURL = URL(fileURLWithPath: arguments[4])
@@ -84,6 +86,13 @@ let source = NSWindow(contentRect: NSRect(x: 35, y: 120, width: 260, height: 200
                       styleMask: [.titled], backing: .buffered, defer: false)
 source.title = "Native drag test source"
 source.contentView = SourceView(file: file)
+if browser {
+    let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 260, height: 200))
+    source.contentView = view
+    source.title = "WebKit browser image drag"
+    let bytes = try Data(contentsOf: file).base64EncodedString()
+    view.loadHTMLString("<html><body style='margin:0'><img draggable='true' style='position:absolute;left:90px;top:60px;width:80px;height:80px' src='data:image/png;base64,\(bytes)'></body></html>", baseURL: nil)
+}
 if finder {
     let automation = Process()
     automation.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -114,7 +123,7 @@ if finder {
 }
 
 DispatchQueue.global().async {
-    Thread.sleep(forTimeInterval: 1)
+    Thread.sleep(forTimeInterval: browser ? 3 : 1)
     let height = CGDisplayBounds(CGMainDisplayID()).height
     let start = finder ? CGPoint(x: 140, y: 202) : CGPoint(x: 165, y: height - 220)
     let cursor = CGPoint(x: 510, y: height - 420)
@@ -155,7 +164,10 @@ DispatchQueue.global().async {
     key(code, down: false, flags: [])
     for _ in 0..<50 {
         Thread.sleep(forTimeInterval: 0.1)
-        if FileManager.default.fileExists(atPath: resultPath.path) {
+        let created = browser
+            ? ((try? FileManager.default.contentsOfDirectory(at: resultPath, includingPropertiesForKeys: nil)) ?? []).contains { $0.pathExtension == "jpg" }
+            : FileManager.default.fileExists(atPath: resultPath.path)
+        if created {
             print("PASS: \(arguments[2]) cross-process file drag displayed the wheel and created \(resultPath.lastPathComponent).")
             exit(0)
         }

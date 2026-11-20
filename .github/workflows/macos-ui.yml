@@ -47,6 +47,14 @@ jobs:
           cp "$RUNNER_TEMP/drag-test/drag.png" "$RUNNER_TEMP/finder-test/drag.png"
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/finder-test/drag.png" shift "$RUNNER_TEMP/finder-test/drag_converted.jpg" "$app/Contents/MacOS/magic_converter-cli" --finder
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/finder-test/drag.png" control "$RUNNER_TEMP/finder-test/drag_converted.png" "$app/Contents/MacOS/magic_converter-cli" --finder
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$HOME/Downloads/MagicConverter" "$app/Contents/MacOS/magic_converter-cli" --web
+          testapp="$RUNNER_TEMP/SettingsTest.app"
+          mkdir -p "$testapp/Contents/MacOS" "$testapp/Contents/Resources"
+          cp "$app/Contents/Info.plist" "$testapp/Contents/Info.plist"
+          cp "$app/Contents/Resources/catalog.json" "$testapp/Contents/Resources/"
+          cp tools/validation/verify_macos_settings.swift "$RUNNER_TEMP/main.swift"
+          xcrun swiftc "$RUNNER_TEMP/main.swift" packaging/macos/Settings.swift packaging/macos/Wheel.swift -o "$testapp/Contents/MacOS/MagicConverter"
+          MAGIC_CONVERTER_PROFILE_DIR="$RUNNER_TEMP/settings-profile" "$testapp/Contents/MacOS/MagicConverter" "$RUNNER_TEMP/settings-test" "$app/Contents/MacOS/magic_converter-cli" "$RUNNER_TEMP/drag-test/drag.png"
       - name: Capture interaction diagnostics
         if: always()
         shell: bash

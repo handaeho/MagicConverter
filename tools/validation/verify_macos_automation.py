@@ -52,7 +52,7 @@ def main():
         assert repeated["ok"] and repeated["job_id"] == accepted["job_id"], (accepted, repeated)
         for _ in range(100):
             current = status()
-            if not current["jobs"]:
+            if not current["jobs"] and list(output.glob("*.jpg")) and (profile / "history.json").exists():
                 break
             time.sleep(0.05)
         assert len(list(output.glob("*.jpg"))) == 1
