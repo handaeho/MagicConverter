@@ -151,7 +151,10 @@ def main():
             if differences:
                 quality_differences.append({"source": case["source"], "action": case["action"],
                                             "differences": sorted(set(differences))})
-            if all(left.get("sha256") == right.get("sha256") for left, right in zip(baseline["outputs"], case["outputs"])):
+            if len(case["outputs"]) == len(baseline["outputs"]) and all(
+                left.get("sha256") is not None and left["sha256"] == right.get("sha256")
+                for left, right in zip(baseline["outputs"], case["outputs"])
+            ):
                 identical_outputs += 1
     report = {"queries": len(contract), "routes": len(cases) + len(missing), "native": len(cases),
               "missing": missing, "executed": len(results), "passed": len(results) - len(failures),
