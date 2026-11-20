@@ -55,7 +55,7 @@ private final class App: NSObject, NSApplicationDelegate {
         styleMask: [.titled, .closable, .miniaturizable, .resizable],
         backing: .buffered, defer: false)
     private let dropView = DropView(frame: .zero)
-    private let input = NSTextField(wrappingLabelWithString: "Finder에서 파일을 이 창에 놓거나 파일을 선택하세요.")
+    private let input = NSTextField(wrappingLabelWithString: "Finder에서 Shift+드래그로 변환 · Ctrl+드래그로 빠른 작업")
     private let destination = NSTextField(labelWithString: "원본 파일과 같은 폴더")
     private let actions = NSPopUpButton(frame: .zero, pullsDown: false)
     private let detail = NSTextField(wrappingLabelWithString: "")
@@ -63,6 +63,13 @@ private final class App: NSObject, NSApplicationDelegate {
     private let reveal = NSButton(title: "Finder에서 결과 보기", target: nil, action: nil)
     private let clear = NSButton(title: "지우기", target: nil, action: nil)
     private let progress = NSProgressIndicator()
+    private let wheel = DragWheel()
+    private var statusItem: NSStatusItem!
+    private let wheelEnabled = NSButton(checkboxWithTitle: "드래그 감지 사용", target: nil, action: nil)
+    private let releaseModifier = NSButton(checkboxWithTitle: "휠 안에서 보조키를 놓아야 실행", target: nil, action: nil)
+    private let notificationPanel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 96),
+                                           styleMask: [.titled, .nonactivatingPanel], backing: .buffered, defer: false)
+    private let notificationText = NSTextField(wrappingLabelWithString: "")
     private var files: [URL] = []
     private var output: URL?
     private var results: [URL] = []
@@ -80,6 +87,8 @@ private final class App: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "MagicConverter 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
+        appMenu.insertItem(withTitle: "설정 창 열기", action: #selector(showWindow), keyEquivalent: ",", at: 0).target = self
+        appMenu.insertItem(withTitle: "MagicConverter 제거…", action: #selector(uninstall), keyEquivalent: "", at: 1).target = self
         let fileItem = NSMenuItem()
         fileItem.title = "파일"
         let fileMenu = NSMenu(title: "파일")
@@ -89,14 +98,41 @@ private final class App: NSObject, NSApplicationDelegate {
         menu.addItem(fileItem)
         NSApp.mainMenu = menu
 
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let image = NSImage(named: "AppIcon") {
+            let small = image.copy() as! NSImage
+            small.size = NSSize(width: 18, height: 18)
+            statusItem.button?.image = small
+            NSApp.applicationIconImage = image
+        } else { statusItem.button?.title = "MC" }
+        statusItem.button?.toolTip = "MagicConverter · Shift 변환 / Ctrl 빠른 작업"
+        let statusMenu = NSMenu()
+        statusMenu.addItem(withTitle: "설정 창 열기", action: #selector(showWindow), keyEquivalent: "").target = self
+        statusMenu.addItem(withTitle: "MagicConverter 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        statusItem.menu = statusMenu
+
+        wheelEnabled.state = UserDefaults.standard.object(forKey: "dragEnabled") as? Bool == false ? .off : .on
+        releaseModifier.state = UserDefaults.standard.bool(forKey: "releaseModifier") ? .on : .off
+        for control in [wheelEnabled, releaseModifier] {
+            control.target = self
+            control.action = #selector(saveDragSettings)
+        }
+        wheelEnabled.toolTip = "Finder에서 Shift 또는 Ctrl을 누른 드래그의 휠 표시 여부"
+        releaseModifier.toolTip = "휠 항목 안에서 보조키를 놓은 후 파일을 놓아야 실행하는 설정"
+        saveDragSettings()
+        wheel.onQuery = { [weak self] files, _, completion in self?.available(files, completion: completion) }
+        wheel.onChoose = { [weak self] action, files in self?.execute(action, files: files) }
+        wheel.start()
+
         window.title = "MagicConverter 3.0.5"
+        window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 560, height: 400)
         window.contentView = dropView
         window.center()
         dropView.onFiles = { [weak self] in self?.setFiles($0) }
 
-        let title = NSTextField(labelWithString: "MagicConverter")
-        title.font = .systemFont(ofSize: 25, weight: .semibold)
+        let title = NSTextField(labelWithString: "MagicConverter 3.0.5")
+        title.font = .systemFont(ofSize: 18, weight: .semibold)
         input.maximumNumberOfLines = 5
         detail.maximumNumberOfLines = 5
         detail.textColor = .secondaryLabelColor
@@ -118,6 +154,7 @@ private final class App: NSObject, NSApplicationDelegate {
 
         let stack = NSStackView(views: [
             title, input,
+            row([wheelEnabled, releaseModifier]),
             row([button("파일 선택…", #selector(chooseFiles)), clear]),
             NSTextField(labelWithString: "변환 작업"), actions,
             NSTextField(labelWithString: "저장 위치"), destination,
@@ -139,6 +176,13 @@ private final class App: NSObject, NSApplicationDelegate {
         ])
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        notificationPanel.title = "MagicConverter 작업 진행"
+        notificationPanel.isReleasedWhenClosed = false
+        notificationPanel.level = .floating
+        notificationPanel.hidesOnDeactivate = false
+        notificationPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        notificationText.frame = NSRect(x: 16, y: 16, width: 308, height: 64)
+        notificationPanel.contentView?.addSubview(notificationText)
         if ProcessInfo.processInfo.arguments.contains("--smoke-test") {
             DispatchQueue.main.async {
                 exit(self.window.isVisible && self.checkVersion() ? 0 : 1)
@@ -148,11 +192,76 @@ private final class App: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         setFiles(urls)
+        showWindow()
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { !busy }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        showWindow()
+        return true
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         busy ? .terminateCancel : .terminateNow
+    }
+
+    @objc private func showWindow() {
+        window.makeKeyAndOrderFront(nil)
+        window.deminiaturize(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func saveDragSettings() {
+        wheel.enabled = wheelEnabled.state == .on
+        wheel.requireRelease = releaseModifier.state == .on
+        UserDefaults.standard.set(wheel.enabled, forKey: "dragEnabled")
+        UserDefaults.standard.set(wheel.requireRelease, forKey: "releaseModifier")
+    }
+
+    private func notify(_ text: String) {
+        notificationText.stringValue = text
+        if let frame = NSScreen.main?.visibleFrame {
+            notificationPanel.setFrameOrigin(NSPoint(x: frame.maxX - 356, y: frame.minY + 18))
+        }
+        notificationPanel.orderFrontRegardless()
+    }
+
+    @objc private func uninstall() {
+        let alert = NSAlert()
+        if busy {
+            alert.messageText = "변환 작업이 실행 중입니다."
+            alert.informativeText = "작업이 끝난 뒤 제거할 수 있습니다."
+            alert.runModal()
+            return
+        }
+        alert.messageText = "MagicConverter를 제거하시겠습니까?"
+        alert.informativeText = "앱을 휴지통으로 옮기고 종료합니다. 변환 결과는 보관됩니다."
+        alert.addButton(withTitle: "제거")
+        alert.addButton(withTitle: "취소")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        NSWorkspace.shared.recycle([Bundle.main.bundleURL]) { _, error in
+            DispatchQueue.main.async {
+                if let error {
+                    let failure = NSAlert(error: error)
+                    failure.messageText = "앱을 휴지통으로 옮기지 못했습니다."
+                    failure.runModal()
+                } else { NSApp.terminate(nil) }
+            }
+        }
+    }
+
+    private func available(_ files: [URL], completion: @escaping ([WheelAction]) -> Void) {
+        guard !busy else { completion([]); return }
+        let cli = cli
+        work.async {
+            let data = try? Self.invoke(cli, ["available", "--"] + files.map(\.path))
+            let choices = data.flatMap { try? JSONDecoder().decode(Choices.self, from: $0) }
+            var actions = choices?.actions.map { WheelAction(key: $0.key, label: $0.label) } ?? []
+            if files.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+                actions += [WheelAction(key: "copy_path", label: "경로 복사"), WheelAction(key: "terminal", label: "터미널 열기")]
+            }
+            let result = actions
+            DispatchQueue.main.async { completion(result) }
+        }
     }
 
     private func row(_ views: [NSView]) -> NSStackView {
@@ -237,6 +346,31 @@ private final class App: NSObject, NSApplicationDelegate {
     @objc private func convert() {
         guard !busy, options.indices.contains(actions.indexOfSelectedItem) else { return }
         let action = options[actions.indexOfSelectedItem]
+        execute(WheelAction(key: action.key, label: action.label), files: files)
+    }
+
+    private func execute(_ action: WheelAction, files: [URL]) {
+        guard !busy, !files.isEmpty else { return }
+        if action.key == "copy_path" {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(files.map(\.path).joined(separator: "\n"), forType: .string)
+            notify("경로 \(files.count)개 복사 완료")
+            return
+        }
+        if action.key == "terminal" {
+            var seen = Set<URL>()
+            for file in files {
+                var directory: ObjCBool = false
+                FileManager.default.fileExists(atPath: file.path, isDirectory: &directory)
+                let folder = directory.boolValue ? file : file.deletingLastPathComponent()
+                guard seen.insert(folder).inserted else { continue }
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                process.arguments = ["-a", "Terminal", folder.path]
+                do { try process.run() } catch { notify("터미널을 열지 못했습니다. \(error.localizedDescription)") }
+            }
+            return
+        }
         let cli = cli
         var arguments = ["convert", "--action", action.key]
         if let output { arguments += ["--output", output.path] }
@@ -245,6 +379,7 @@ private final class App: NSObject, NSApplicationDelegate {
         run.isEnabled = false
         reveal.isEnabled = false
         detail.stringValue = "변환 중…"
+        notify("\(action.label) · \(files.count)개 파일 변환 중…")
         progress.startAnimation(nil)
         let request = arguments
         work.async {
@@ -262,8 +397,10 @@ private final class App: NSObject, NSApplicationDelegate {
                     self.detail.stringValue = ([report.ok ? "변환 완료 · 결과 \(self.results.count)개" : "변환 실패"]
                                                + Array(notices.prefix(2))).joined(separator: "\n")
                     self.reveal.isEnabled = !self.results.isEmpty
+                    self.notify(self.detail.stringValue)
                 } catch {
                     self.detail.stringValue = "변환 결과를 읽지 못했습니다. \(error.localizedDescription)"
+                    self.notify(self.detail.stringValue)
                 }
             }
         }

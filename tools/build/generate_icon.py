@@ -35,7 +35,25 @@ def render_icon():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--render", action="store_true")
+    parser.add_argument("--macos", action="store_true", help="Render the macOS icon source PNG")
     args = parser.parse_args()
+    if args.macos:
+        from PySide6.QtCore import QRectF, Qt
+        from PySide6.QtGui import QImage, QPainter
+        from PySide6.QtSvg import QSvgRenderer
+
+        canvas = QImage(1024, 1024, QImage.Format.Format_RGBA8888)
+        canvas.fill(Qt.GlobalColor.transparent)
+        renderer = QSvgRenderer(str(destination.with_suffix(".svg")))
+        if not renderer.isValid():
+            raise SystemExit("Invalid icon SVG")
+        painter = QPainter(canvas)
+        renderer.render(painter, QRectF(0, 0, 1024, 1024))
+        painter.end()
+        png = destination.with_suffix(".png")
+        if not canvas.save(str(png)):
+            raise SystemExit("Could not save the macOS icon")
+        print(png)
     if args.render:
         render_icon()
     if not destination.is_file():

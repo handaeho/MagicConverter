@@ -1,7 +1,7 @@
 name: macOS build and verification
 on:
   push:
-    branches: ['codex/macos-3.0.5']
+    branches: ['codex/macos-3.0.5', 'codex/macos-parity']
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,8 +13,10 @@ jobs:
         include:
           - runner: macos-15
             arch: arm64
+            engine_sha: ecb6685affa8ce208af00ad6cf2ea686189a763035298f6638e73f6f18c1649a
           - runner: macos-15-intel
             arch: x86_64
+            engine_sha: 96079fae47800065e47a62061e9c8917ed4b01add58d70245434d04bcf1d4014
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:
@@ -23,12 +25,18 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Build macOS package
         shell: bash
         run: |
           test "$(uname -m)" = "${{ matrix.arch }}"
-          rustup toolchain install 1.92.0 --profile minimal
-          export RUSTUP_TOOLCHAIN=1.92.0
+          # Reuse the already released engine only when all its build inputs match.
+          git diff --exit-code v3.0.5-macos.1 -- rust/magic-converter rust/copy-worker
+          name="MagicConverter-3.0.5-macOS-${{ matrix.arch }}.zip"
+          curl --fail --silent --show-error --location --retry 2 -o "$RUNNER_TEMP/engine.zip" "https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/$name"
+          printf '%s  %s\n' '${{ matrix.engine_sha }}' "$RUNNER_TEMP/engine.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/engine.zip" "$RUNNER_TEMP/engine"
+          export MAGIC_CONVERTER_ENGINE_APP="$RUNNER_TEMP/engine/MagicConverter.app"
           bash packaging/macos/build.sh "$RUNNER_TEMP/release"
       - name: Verify the extracted app
         shell: bash
@@ -40,6 +48,9 @@ jobs:
           bin="$app/Contents/MacOS"
           codesign --verify --deep --strict "$app"
           "$bin/MagicConverter" --smoke-test
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$app/Contents/Info.plist")" = 30502
+          test -s "$app/Contents/Resources/AppIcon.icns"
+          iconutil --convert iconset --output "$RUNNER_TEMP/check-icon.iconset" "$app/Contents/Resources/AppIcon.icns"
           "$bin/magic_converter-cli" --version | grep '3\.0\.5$'
           "$app/Contents/vendor/rhwp/rhwp" --version
           "$bin/magic_converter-cli" actions >/dev/null
@@ -49,6 +60,14 @@ jobs:
           "$py" tools/validation/verify_rust_pdf_pptx_layout.py --candidate "$bin/magic_converter-cli" --output "$RUNNER_TEMP/pdf-test"
           "$py" tools/validation/verify_rust_word_photo_table.py --candidate "$bin/magic_converter-cli" --rhwp "$app/Contents/vendor/rhwp/rhwp" --output "$RUNNER_TEMP/word-test"
           "$bin/magic_converter-cli" available -- "$RUNNER_TEMP/pdf-test/layout.pdf" | grep '"pptx_editable"'
+          xcrun swiftc tools/validation/verify_macos_launch.swift -o "$RUNNER_TEMP/check-window"
+          /usr/bin/open -n -a "$app"
+          "$RUNNER_TEMP/check-window" "$app" --keep-running
+          xcrun swiftc tools/validation/verify_macos_drag.swift -o "$RUNNER_TEMP/check-drag"
+          mkdir "$RUNNER_TEMP/drag-test"
+          "$py" -c 'from PIL import Image; import sys; Image.new("RGB", (40, 30), (52, 91, 140)).save(sys.argv[1])' "$RUNNER_TEMP/drag-test/drag.png"
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$RUNNER_TEMP/drag-test/drag_converted.jpg" "$bin/magic_converter-cli"
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" control "$RUNNER_TEMP/drag-test/drag_stripped.png" "$bin/magic_converter-cli"
           printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' \
             "$(uname -m)" > "$RUNNER_TEMP/release/verification-${{ matrix.arch }}.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -57,5 +76,6 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ runner.temp }}/release/*.zip
+            ${{ runner.temp }}/release/*.pkg
             ${{ runner.temp }}/release/*.sha256
             ${{ runner.temp }}/release/verification-*.txt

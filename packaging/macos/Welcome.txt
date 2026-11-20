@@ -1,0 +1,9 @@
+MagicConverter 3.0.5
+
+Finder에서 파일을 드래그한 뒤 Shift를 누르면 변환 휠이, Ctrl을 누르면 빠른 작업 휠이 나타납니다. 원하는 항목 위에서 파일을 놓으세요.
+
+Control을 누른 채 클릭하면 macOS의 보조 클릭이 실행됩니다. 파일을 먼저 드래그하고 Control을 누르세요.
+
+앱 창을 닫은 뒤에도 메뉴 막대의 MagicConverter 아이콘에서 설정을 열거나 앱을 종료할 수 있습니다.
+
+이 설치 프로그램은 응용 프로그램 폴더에 MagicConverter를 설치합니다. macOS 15 이상과 Mac의 칩에 맞는 배포 파일이 필요합니다.

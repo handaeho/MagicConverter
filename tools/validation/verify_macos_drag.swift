@@ -1,0 +1,139 @@
+import AppKit
+import CoreGraphics
+
+private final class SourceView: NSView, NSDraggingSource {
+    let file: URL
+    init(file: URL) {
+        self.file = file
+        super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 200))
+    }
+    required init?(coder: NSCoder) { nil }
+    override func draw(_ rect: NSRect) {
+        NSColor.white.setFill()
+        bounds.fill()
+        NSWorkspace.shared.icon(forFile: file.path).draw(in: NSRect(x: 90, y: 70, width: 80, height: 80))
+    }
+    override func mouseDown(with event: NSEvent) { }
+    override func mouseDragged(with event: NSEvent) {
+        let item = NSDraggingItem(pasteboardWriter: file as NSURL)
+        item.setDraggingFrame(NSRect(x: 95, y: 75, width: 64, height: 64), contents: NSWorkspace.shared.icon(forFile: file.path))
+        beginDraggingSession(with: [item], event: event, source: self)
+    }
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        [.copy, .generic, .link]
+    }
+}
+
+private func windows() -> [[String: Any]] {
+    CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+}
+
+private func wheelFrame() -> CGRect? {
+    let applications = NSRunningApplication.runningApplications(withBundleIdentifier: "com.handaeho.magicconverter")
+    let pids = Set(applications.map(\.processIdentifier))
+    for window in windows() {
+        guard let pid = (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, pids.contains(pid),
+              let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+              let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+              abs(frame.width - 350) < 2 && abs(frame.height - 350) < 2 else { continue }
+        return frame
+    }
+    return nil
+}
+
+private func post(_ type: CGEventType, _ point: CGPoint, flags: CGEventFlags = []) {
+    let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)!
+    event.flags = flags
+    event.post(tap: .cghidEventTap)
+}
+
+private func key(_ code: CGKeyCode, down: Bool, flags: CGEventFlags) {
+    let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)!
+    event.flags = flags
+    event.post(tap: .cghidEventTap)
+}
+
+let arguments = CommandLine.arguments
+let file = URL(fileURLWithPath: arguments[1])
+let quick = arguments[2] == "control"
+let resultPath = URL(fileURLWithPath: arguments[3])
+let cli = Process()
+cli.executableURL = URL(fileURLWithPath: arguments[4])
+cli.arguments = ["available", "--", file.path]
+let cliOutput = Pipe()
+cli.standardOutput = cliOutput
+try cli.run()
+let data = cliOutput.fileHandleForReading.readDataToEndOfFile()
+cli.waitUntilExit()
+let choices = (try JSONSerialization.jsonObject(with: data) as! [String: Any])["actions"] as! [[String: Any]]
+let slots = choices.filter { action in
+    let key = action["key"] as! String
+    let tool = key.hasPrefix("tool:")
+    return quick ? tool || ["strip", "zip"].contains(key) : !tool && key != "zip"
+}
+let wanted = quick ? "strip" : "image:jpg"
+guard let slot = slots.firstIndex(where: { $0["key"] as? String == wanted }) else {
+    fatalError("The engine did not offer \(wanted)")
+}
+let slotCount = min(12, slots.count + (quick ? 2 : 0))
+precondition(slot < 12)
+let app = NSApplication.shared
+app.setActivationPolicy(.regular)
+let source = NSWindow(contentRect: NSRect(x: 35, y: 120, width: 260, height: 200),
+                      styleMask: [.titled], backing: .buffered, defer: false)
+source.title = "Native drag test source"
+source.contentView = SourceView(file: file)
+source.makeKeyAndOrderFront(nil)
+app.activate(ignoringOtherApps: true)
+
+DispatchQueue.global().async {
+    Thread.sleep(forTimeInterval: 1)
+    let height = CGDisplayBounds(CGMainDisplayID()).height
+    let start = CGPoint(x: 165, y: height - 220)
+    let cursor = CGPoint(x: 510, y: height - 420)
+    let flags: CGEventFlags = quick ? .maskControl : .maskShift
+    let code: CGKeyCode = quick ? 59 : 56
+    post(.mouseMoved, start)
+    post(.leftMouseDown, start)
+    Thread.sleep(forTimeInterval: 0.2)
+    for index in 1...20 {
+        let fraction = CGFloat(index) / 20
+        post(.leftMouseDragged, CGPoint(x: start.x + (cursor.x - start.x) * fraction,
+                                       y: start.y + (cursor.y - start.y) * fraction))
+        Thread.sleep(forTimeInterval: 0.025)
+    }
+    key(code, down: true, flags: flags)
+    post(.leftMouseDragged, cursor, flags: flags)
+    var wheel: CGRect?
+    for _ in 0..<30 {
+        Thread.sleep(forTimeInterval: 0.1)
+        if let frame = wheelFrame() { wheel = frame; break }
+    }
+    guard let wheel else {
+        post(.leftMouseUp, cursor)
+        key(code, down: false, flags: [])
+        print("FAILED: no wheel appeared during a real cross-process \(arguments[2]) file drag. Accessibility trusted: \(AXIsProcessTrusted())")
+        exit(1)
+    }
+    let angle = Double(slot) * 2 * .pi / Double(slotCount)
+    let target = CGPoint(x: wheel.midX + sin(angle) * 117, y: wheel.midY - cos(angle) * 117)
+    for index in 1...12 {
+        let fraction = CGFloat(index) / 12
+        post(.leftMouseDragged, CGPoint(x: cursor.x + (target.x - cursor.x) * fraction,
+                                       y: cursor.y + (target.y - cursor.y) * fraction), flags: flags)
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+    Thread.sleep(forTimeInterval: 1.5)
+    post(.leftMouseUp, target, flags: flags)
+    key(code, down: false, flags: [])
+    for _ in 0..<50 {
+        Thread.sleep(forTimeInterval: 0.1)
+        if FileManager.default.fileExists(atPath: resultPath.path) {
+            print("PASS: \(arguments[2]) cross-process file drag displayed the wheel and created \(resultPath.lastPathComponent).")
+            exit(0)
+        }
+    }
+    print("FAILED: wheel appeared but no output was created at \(resultPath.path).")
+    exit(1)
+}
+app.run()

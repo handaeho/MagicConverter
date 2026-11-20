@@ -34,13 +34,29 @@ bundle="$app/Contents"
 mkdir -p "$bundle/MacOS" "$bundle/Resources/Notices" "$bundle/vendor/pdfium" "$bundle/vendor/rhwp"
 export MACOSX_DEPLOYMENT_TARGET=15.0
 
-xcrun swiftc -swift-version 5 -O -target "$arch-apple-macosx15.0" packaging/macos/MagicConverter.swift -o "$bundle/MacOS/MagicConverter"
-cargo test --locked --release --target "$triple" --target-dir "$target" --manifest-path rust/magic-converter/Cargo.toml --lib
-cargo build --locked --release --target "$triple" --target-dir "$target" --manifest-path rust/magic-converter/Cargo.toml --bin magic-converter-rust --bin magic_converter_mcp
-install -m 755 "$target/$triple/release/magic-converter-rust" "$bundle/MacOS/magic_converter-cli"
-install -m 755 "$target/$triple/release/magic_converter_mcp" "$bundle/MacOS/magic_converter-mcp"
+# A file named main.swift is required for top-level entry points with several Swift files.
+cp packaging/macos/MagicConverter.swift "$work/main.swift"
+xcrun swiftc -swift-version 5 -O -target "$arch-apple-macosx15.0" "$work/main.swift" packaging/macos/Wheel.swift -o "$bundle/MacOS/MagicConverter"
+if [ -n "${MAGIC_CONVERTER_ENGINE_APP:-}" ]; then
+  # UI-only builds may reuse a hash-verified package of the unchanged 3.0.5 engine.
+  install -m 755 "$MAGIC_CONVERTER_ENGINE_APP/Contents/MacOS/magic_converter-cli" "$bundle/MacOS/magic_converter-cli"
+  install -m 755 "$MAGIC_CONVERTER_ENGINE_APP/Contents/MacOS/magic_converter-mcp" "$bundle/MacOS/magic_converter-mcp"
+else
+  cargo test --locked --release --target "$triple" --target-dir "$target" --manifest-path rust/magic-converter/Cargo.toml --lib
+  cargo build --locked --release --target "$triple" --target-dir "$target" --manifest-path rust/magic-converter/Cargo.toml --bin magic-converter-rust --bin magic_converter_mcp
+  install -m 755 "$target/$triple/release/magic-converter-rust" "$bundle/MacOS/magic_converter-cli"
+  install -m 755 "$target/$triple/release/magic_converter_mcp" "$bundle/MacOS/magic_converter-mcp"
+fi
 install -m 644 packaging/macos/Info.plist "$bundle/Info.plist"
 install -m 644 LICENSE "$bundle/Resources/Notices/LICENSE-MagicConverter"
+iconset="$work/AppIcon.iconset"
+mkdir "$iconset"
+for size in 16 32 128 256 512; do
+  sips --resampleHeightWidth "$size" "$size" assets/magic_converter-tool.png --out "$iconset/icon_\${size}x\${size}.png" >/dev/null
+  twice=$((size * 2))
+  sips --resampleHeightWidth "$twice" "$twice" assets/magic_converter-tool.png --out "$iconset/icon_\${size}x\${size}@2x.png" >/dev/null
+done
+iconutil --convert icns --output "$bundle/Resources/AppIcon.icns" "$iconset"
 
 fetch() {
   curl --proto '=https' --tlsv1.2 -fLsS --retry 3 --output "$2" "$1"
@@ -78,3 +94,14 @@ plutil -lint "$bundle/Info.plist"
 name="MagicConverter-$version-macOS-$arch.zip"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$out/$name"
 (cd "$out" && shasum -a 256 "$name" > "$name.sha256")
+
+mkdir -p "$work/installer/Applications" "$work/installer-resources"
+ditto "$app" "$work/installer/Applications/MagicConverter.app"
+pkgbuild --root "$work/installer" --identifier com.handaeho.magicconverter \
+  --version 3.0.5.2 --install-location / "$work/MagicConverter-component.pkg"
+cp LICENSE "$work/installer-resources/License.txt"
+cp packaging/macos/Welcome.txt "$work/installer-resources/Welcome.txt"
+pkgname="MagicConverter-$version-macOS-$arch.pkg"
+productbuild --distribution packaging/macos/Distribution.xml \
+  --resources "$work/installer-resources" --package-path "$work" "$out/$pkgname"
+(cd "$out" && shasum -a 256 "$pkgname" > "$pkgname.sha256")

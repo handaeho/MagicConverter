@@ -19,7 +19,7 @@ while Date() < deadline {
         }
         if mainWindowVisible {
             print("Launch Services started MagicConverter and WindowServer reported its main window.")
-            application.terminate()
+            if !CommandLine.arguments.contains("--keep-running") { application.terminate() }
             exit(0)
         }
     }
