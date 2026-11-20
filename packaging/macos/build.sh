@@ -97,6 +97,11 @@ for path in Path(sys.argv[1]).rglob('*'):
     if path.is_file() and not path.is_symlink():
         with path.open('rb') as stream:
             magic = stream.read(4)
+        if magic == b'\xca\xfe\xba\xbe' and 'Mach-O' not in subprocess.check_output(
+            ['/usr/bin/file', '-b', path], text=True
+        ):
+            # Java class files share the universal Mach-O magic number.
+            continue
         if magic in (b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xca\xfe\xba\xbe'):
             subprocess.run(['lipo', path, '-verify_arch', sys.argv[2]], check=True)
             if 'LibreOffice.app' not in path.parts:
