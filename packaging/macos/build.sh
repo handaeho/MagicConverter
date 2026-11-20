@@ -84,10 +84,21 @@ fi
 install -m 644 vendor/rhwp/THIRD_PARTY_LICENSES.md "$bundle/Resources/Notices/rhwp/THIRD_PARTY_LICENSES.md"
 cp docs/user/MACOS.md "$bundle/Resources/"
 
-for executable in "$bundle"/MacOS/* "$bundle/vendor/rhwp/rhwp" "$bundle/vendor/pdfium/libpdfium.dylib"; do
-  lipo "$executable" -verify_arch "$arch"
-  codesign --force --sign - "$executable"
-done
+if [ "${MAGIC_CONVERTER_FULL_RUNTIME:-0}" = 1 ]; then
+  bash packaging/macos/runtime.sh "$app" "$work"
+fi
+python3 - "$bundle" "$arch" <<'PY'
+from pathlib import Path
+import subprocess
+import sys
+for path in Path(sys.argv[1]).rglob('*'):
+    if path.is_file() and not path.is_symlink():
+        with path.open('rb') as stream:
+            magic = stream.read(4)
+        if magic in (b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xca\xfe\xba\xbe'):
+            subprocess.run(['lipo', path, '-verify_arch', sys.argv[2]], check=True)
+            subprocess.run(['codesign', '--force', '--sign', '-', path], check=True)
+PY
 codesign --force --sign - "$app"
 codesign --verify --deep --strict "$app"
 plutil -lint "$bundle/Info.plist"

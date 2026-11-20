@@ -73,7 +73,7 @@ fn find(executable: &OsStr) -> Option<PathBuf> {
     }
     env::split_paths(&env::var_os("PATH").unwrap_or_default()).find_map(|directory| {
         let candidate = directory.join(path);
-        let candidate = if candidate.extension().is_none() {
+        let candidate = if cfg!(windows) && candidate.extension().is_none() {
             candidate.with_extension("exe")
         } else {
             candidate
@@ -105,7 +105,13 @@ impl Tools {
         let encoder = (!configured.is_empty())
             .then(|| find(&configured))
             .flatten()
-            .or_else(|| bundled("ffmpeg.exe"))
+            .or_else(|| {
+                bundled(if cfg!(windows) {
+                    "ffmpeg.exe"
+                } else {
+                    "ffmpeg"
+                })
+            })
             .or_else(|| find(OsStr::new("ffmpeg")))
             .or_else(|| {
                 if cfg!(target_os = "macos") {

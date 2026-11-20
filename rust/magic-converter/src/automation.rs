@@ -1,6 +1,9 @@
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub mod ipc;
 #[cfg(windows)]
+mod pipe;
+#[cfg(target_os = "macos")]
+#[path = "automation/pipe_unix.rs"]
 mod pipe;
 pub mod watch;
 
@@ -24,21 +27,21 @@ struct Active {
     action: String,
     files: Vec<(String, &'static str)>,
     cancelled: Arc<AtomicBool>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     label: String,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     showing_progress: bool,
 }
 
 #[derive(Default)]
 struct ActiveJobs {
     jobs: Mutex<BTreeMap<u64, Active>>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     events: Option<std::sync::mpsc::Sender<ipc::DesktopEvent>>,
 }
 
 impl ActiveJobs {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn with_desktop(desktop: Option<&ipc::DesktopHost>) -> Self {
         Self {
             events: desktop.map(|host| host.events.clone()),
@@ -71,9 +74,9 @@ impl ActiveJobs {
                 action: plan.selection.action.key.clone(),
                 files,
                 cancelled,
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 label: plan.selection.name.clone(),
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 showing_progress: false,
             },
         );
@@ -83,7 +86,7 @@ impl ActiveJobs {
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn snapshots(&self) -> Vec<Value> {
         self.jobs.lock().unwrap().iter().take(100).map(|(&id, job)| {
             let files: Vec<_> = job.files.iter().take(64).map(|(name, state)| json!({"name": name, "state": state})).collect();
@@ -91,7 +94,7 @@ impl ActiveJobs {
         }).collect()
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn cancel(&self, id: u64) -> bool {
         self.jobs.lock().unwrap().get(&id).is_some_and(|job| {
             job.cancelled.store(true, Ordering::Relaxed);
@@ -99,7 +102,7 @@ impl ActiveJobs {
         })
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn cancel_all(&self) {
         for job in self.jobs.lock().unwrap().values() {
             job.cancelled.store(true, Ordering::Relaxed);
@@ -116,7 +119,7 @@ impl JobGuard {
     fn update(&self, index: usize, state: &'static str) {
         if let Some(job) = self.jobs.jobs.lock().unwrap().get_mut(&self.id) {
             job.files[index].1 = state;
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             if let Some(events) = &self.jobs.events {
                 job.showing_progress = true;
                 let finished = job
@@ -137,7 +140,7 @@ impl JobGuard {
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     fn finish(&self, result: &Value) {
         use ipc::ProgressOutcome;
         let outcome = if result["cancelled"] == true {
@@ -165,7 +168,7 @@ impl JobGuard {
 impl Drop for JobGuard {
     fn drop(&mut self) {
         let _job = self.jobs.jobs.lock().unwrap().remove(&self.id);
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         if _job.is_some_and(|job| job.showing_progress)
             && let Some(events) = &self.jobs.events
         {
@@ -428,11 +431,31 @@ fn new_id() -> String {
 
 struct ProfileLock {
     _file: File,
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     path: PathBuf,
 }
 
 impl ProfileLock {
+    #[cfg(target_os = "macos")]
+    fn acquire(path: PathBuf, timeout: Duration) -> Result<Self> {
+        let started = std::time::Instant::now();
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        loop {
+            match file.try_lock() {
+                Ok(()) => return Ok(Self { _file: file }),
+                Err(std::fs::TryLockError::WouldBlock) if started.elapsed() < timeout => {
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
     fn acquire(path: PathBuf, timeout: Duration) -> Result<Self> {
         let started = std::time::Instant::now();
         let host = std::env::var("COMPUTERNAME").unwrap_or_default();
@@ -480,7 +503,7 @@ impl ProfileLock {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 impl Drop for ProfileLock {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);

@@ -1,7 +1,11 @@
 #include <avif/avif.h>
 #include <string.h>
 
+#ifdef _WIN32
 #define API __declspec(dllexport)
+#else
+#define API __attribute__((visibility("default")))
+#endif
 
 typedef struct {
     uint32_t width, height, count, high_depth, alpha, orientation, metadata;

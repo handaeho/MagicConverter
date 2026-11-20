@@ -4,9 +4,15 @@
 
 using namespace mupdf;
 
+#ifdef _WIN32
+#define API __declspec(dllexport)
+#else
+#define API __attribute__((visibility("default")))
+#endif
+
 extern "C" {
 
-__declspec(dllexport) int mc_mupdf_open(const char* path, fz_document** document, int* pages) noexcept {
+API int mc_mupdf_open(const char* path, fz_document** document, int* pages) noexcept {
     try {
         std::unique_ptr<fz_document, decltype(&ll_fz_drop_document)> handle(
             ll_fz_open_document(path), ll_fz_drop_document);
@@ -19,7 +25,7 @@ __declspec(dllexport) int mc_mupdf_open(const char* path, fz_document** document
     }
 }
 
-__declspec(dllexport) int mc_mupdf_png(
+API int mc_mupdf_png(
     fz_document* document, int index, int dpi, fz_buffer** result,
     const unsigned char** data, size_t* size, float* width, float* height) noexcept {
     try {
@@ -56,11 +62,11 @@ __declspec(dllexport) int mc_mupdf_png(
     }
 }
 
-__declspec(dllexport) void mc_mupdf_close(fz_document* document) noexcept {
+API void mc_mupdf_close(fz_document* document) noexcept {
     ll_fz_drop_document(document);
 }
 
-__declspec(dllexport) int mc_mupdf_region(
+API int mc_mupdf_region(
     fz_document* document, int index, const float* requested, int dpi,
     fz_buffer** result, const unsigned char** data, size_t* size, int* origin) noexcept {
     try {
@@ -100,7 +106,7 @@ __declspec(dllexport) int mc_mupdf_region(
     }
 }
 
-__declspec(dllexport) void mc_mupdf_drop_png(fz_buffer* buffer) noexcept {
+API void mc_mupdf_drop_png(fz_buffer* buffer) noexcept {
     ll_fz_drop_buffer(buffer);
 }
 

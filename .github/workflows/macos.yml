@@ -30,13 +30,9 @@ jobs:
         shell: bash
         run: |
           test "$(uname -m)" = "${{ matrix.arch }}"
-          # Reuse the already released engine only when all its build inputs match.
-          git diff --exit-code v3.0.5-macos.1 -- rust/magic-converter rust/copy-worker
-          name="MagicConverter-3.0.5-macOS-${{ matrix.arch }}.zip"
-          curl --fail --silent --show-error --location --retry 2 -o "$RUNNER_TEMP/engine.zip" "https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/$name"
-          printf '%s  %s\n' '${{ matrix.engine_sha }}' "$RUNNER_TEMP/engine.zip" | shasum -a 256 -c -
-          ditto -x -k "$RUNNER_TEMP/engine.zip" "$RUNNER_TEMP/engine"
-          export MAGIC_CONVERTER_ENGINE_APP="$RUNNER_TEMP/engine/MagicConverter.app"
+          rustup toolchain install 1.92.0 --profile minimal
+          export RUSTUP_TOOLCHAIN=1.92.0
+          export MAGIC_CONVERTER_FULL_RUNTIME=1
           bash packaging/macos/build.sh "$RUNNER_TEMP/release"
       - name: Verify the extracted app
         shell: bash

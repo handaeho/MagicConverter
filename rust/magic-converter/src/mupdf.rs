@@ -42,7 +42,11 @@ static ENGINE: OnceLock<Result<Engine, String>> = OnceLock::new();
 
 fn load() -> io::Result<Engine> {
     let exe = std::env::current_exe()?;
-    let name = "magic_mupdf_bridge.dll";
+    let name = if cfg!(target_os = "macos") {
+        "libmagic_mupdf_bridge.dylib"
+    } else {
+        "magic_mupdf_bridge.dll"
+    };
     let path = std::env::var_os("MAGIC_CONVERTER_MUPDF")
         .map(std::path::PathBuf::from)
         .into_iter()

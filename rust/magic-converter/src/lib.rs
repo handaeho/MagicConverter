@@ -80,15 +80,15 @@ enum Command {
     Presets(Common),
     Convert(Convert),
     Watch(automation::watch::Watch),
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     Serve(automation::ipc::Serve),
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     Send(automation::ipc::Send),
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     Status(Common),
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     Cancel(automation::ipc::Cancel),
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     Stop(automation::ipc::Stop),
     #[cfg(windows)]
     Shell(desktop::shell::Shell),
@@ -388,7 +388,7 @@ fn supported(edge: &Edge) -> bool {
                     | "document:png"
                     | "document:jpg"
             ))
-        || (cfg!(windows)
+        || ((cfg!(windows) || cfg!(target_os = "macos"))
             && ((edge.engine_id == "pdf" && edge.action_key == "pptx_image")
                 || (edge.engine_id == "ebook" && edge.action_key == "ebook:cbz")))
         || (edge.engine_id == "metadata" && edge.action_key == "strip")
@@ -1186,7 +1186,7 @@ fn measure_archive(
     Ok(json!({"ok": true, "jobs": [{"outputs": [output], "engine_s": elapsed}]}))
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 fn ipc_result(result: automation::Result<Value>, common: Common) -> (Value, u8, Common) {
     let report = result.unwrap_or_else(|error| json!({"ok": false, "error": error.to_string()}));
     let code = u8::from(report["ok"] != true);
@@ -1285,20 +1285,20 @@ fn run(command: Command, catalog: &Catalog) -> Result<u8, Box<dyn std::error::Er
                 .unwrap_or_else(|error| (json!({"ok": false, "error": error}), 1));
             (report, code, automation::watch::common(&input).clone())
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         Command::Serve(input) => {
             let (report, code) = automation::ipc::serve(catalog, &input)
                 .unwrap_or_else(|error| (json!({"ok": false, "error": error.to_string()}), 1));
             (report, code, input.common)
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         Command::Send(input) => ipc_result(automation::ipc::send(catalog, &input), input.common),
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         Command::Status(common) => ipc_result(
             automation::ipc::call(&common, json!({"command": "status"})),
             common,
         ),
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         Command::Cancel(input) => ipc_result(
             automation::ipc::call(
                 &input.common,
@@ -1306,7 +1306,7 @@ fn run(command: Command, catalog: &Catalog) -> Result<u8, Box<dyn std::error::Er
             ),
             input.common,
         ),
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         Command::Stop(input) => ipc_result(
             automation::ipc::call(
                 &input.common,

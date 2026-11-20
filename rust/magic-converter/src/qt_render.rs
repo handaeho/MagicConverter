@@ -10,12 +10,13 @@ pub(crate) fn engine() -> Option<PathBuf> {
     std::env::var_os("MAGIC_CONVERTER_QT")
         .map(PathBuf::from)
         .into_iter()
-        .chain(
-            executable
-                .ancestors()
-                .skip(1)
-                .map(|root| root.join("vendor/qt/magic_qt_render.exe")),
-        )
+        .chain(executable.ancestors().skip(1).map(|root| {
+            root.join("vendor/qt").join(if cfg!(windows) {
+                "magic_qt_render.exe"
+            } else {
+                "magic_qt_render"
+            })
+        }))
         .find(|path| path.is_absolute() && path.is_file())
 }
 
