@@ -325,23 +325,31 @@ final class SettingsWindow: NSObject {
         if entries.isEmpty { return [row("결과 기록", NSTextField(labelWithString: "아직 변환 기록이 없습니다."))] }
         historyOutputs = [:]
         historyDetails = [:]
-        return entries.reversed().prefix(200).map { entry in
+        var rows: [[NSView]] = []
+        for entry in entries.reversed().prefix(200) {
             let files = entry["files"] as? [[String: Any]] ?? []
             let sources = files.compactMap { $0["source"] as? String }
             let id = entry["id"] as? String ?? UUID().uuidString
             historyOutputs[id] = files.flatMap { $0["outputs"] as? [String] ?? [] }.map { URL(fileURLWithPath: $0) }
-            historyDetails[id] = files.map { file in
-                ([file["source"] as? String ?? "", "상태 · \(file["state"] as? String ?? "")"]
-                 + (file["errors"] as? [String] ?? []) + (file["warnings"] as? [String] ?? [])
-                 + (file["outputs"] as? [String] ?? [])).joined(separator: "\n")
-            }.joined(separator: "\n\n")
+            var detailsText: [String] = []
+            for file in files {
+                var lines = [file["source"] as? String ?? "", "상태 · \(file["state"] as? String ?? "")"]
+                lines.append(contentsOf: file["errors"] as? [String] ?? [])
+                lines.append(contentsOf: file["warnings"] as? [String] ?? [])
+                lines.append(contentsOf: file["outputs"] as? [String] ?? [])
+                detailsText.append(lines.joined(separator: "\n"))
+            }
+            historyDetails[id] = detailsText.joined(separator: "\n\n")
             let reveal = button("결과 위치", #selector(revealHistory))
             reveal.identifier = NSUserInterfaceItemIdentifier(id)
             reveal.isEnabled = !(historyOutputs[id] ?? []).isEmpty
             let details = button("자세히", #selector(showHistoryDetails))
             details.identifier = NSUserInterfaceItemIdentifier(id)
-            return row(entry["label"] as? String ?? "변환", NSStackView(views: [NSTextField(wrappingLabelWithString: sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")), reveal, details]))
+            let names = sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")
+            let label = NSTextField(wrappingLabelWithString: names)
+            rows.append(row(entry["label"] as? String ?? "변환", NSStackView(views: [label, reveal, details])))
         }
+        return rows
     }
 
     @objc private func revealHistory(_ sender: NSButton) {
