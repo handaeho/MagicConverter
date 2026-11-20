@@ -3,6 +3,7 @@ import AppKit
 struct WheelAction: Equatable {
     let key: String
     let label: String
+    var presetID: String? = nil
 }
 
 enum WheelMode: String {
@@ -22,8 +23,8 @@ enum WheelMode: String {
 }
 
 func draggedFiles(_ board: NSPasteboard) -> [URL] {
-    let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
-    let urls = board.readObjects(forClasses: [NSURL.self], options: options) as? [URL] ?? []
+    let urls = (board.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] ?? [])
+        .filter { $0.isFileURL || ["https", "http"].contains($0.scheme?.lowercased() ?? "") }
     if !urls.isEmpty { return urls }
     let paths = board.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String] ?? []
     return paths.map { URL(fileURLWithPath: $0) }
@@ -43,7 +44,7 @@ final class WheelView: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL, NSPasteboard.PasteboardType("NSFilenamesPboardType")])
+        registerForDraggedTypes([.fileURL, .URL, NSPasteboard.PasteboardType("NSFilenamesPboardType")])
         setAccessibilityIdentifier("magicconverter-wheel")
         setAccessibilityLabel("변환 작업 휠")
     }
@@ -126,7 +127,8 @@ final class WheelView: NSView {
         // Generic preserves the drag's source files even when Finder maps Control to a link.
         let mask = sender.draggingSourceOperationMask
         if mask.contains(.copy) { return .copy }
-        return mask.contains(.generic) ? .generic : []
+        if mask.contains(.generic) { return .generic }
+        return mask.contains(.link) ? .link : []
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -152,6 +154,8 @@ final class DragWheel {
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     var enabled = true
     var requireRelease = false
+    var threshold: CGFloat = 15
+    var interval: TimeInterval = 0.035
     var onChoose: ((WheelAction, [URL]) -> Void)?
     var onQuery: (([URL], WheelMode, @escaping ([WheelAction]) -> Void) -> Void)?
     private var timer: Timer?
@@ -178,7 +182,8 @@ final class DragWheel {
     }
 
     func start() {
-        timer = Timer(timeInterval: 0.035, repeats: true) { [weak self] _ in self?.poll() }
+        timer?.invalidate()
+        timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.poll() }
         RunLoop.main.add(timer!, forMode: .common)
     }
 
@@ -218,10 +223,10 @@ final class DragWheel {
             } else if panel.isVisible { finish() }
             return
         }
-        guard let current, let origin, hypot(point.x - origin.x, point.y - origin.y) >= 15 else { return }
+        guard let current, let origin, hypot(point.x - origin.x, point.y - origin.y) >= threshold else { return }
         if !panel.isVisible {
             let board = NSPasteboard(name: .drag)
-            guard board.types?.contains(where: { $0 == .fileURL || $0.rawValue == "NSFilenamesPboardType" }) == true else { return }
+            guard board.types?.contains(where: { $0 == .fileURL || $0 == .URL || $0.rawValue == "NSFilenamesPboardType" }) == true else { return }
             mode = current
             source = []
             view.actions = []
@@ -254,7 +259,7 @@ final class DragWheel {
         view.actions = []
         onQuery?(files, mode) { [weak self] actions in
             guard let self, self.request == token, self.panel.isVisible else { return }
-            self.view.actions = Array(actions.filter { mode.includes($0) }.prefix(12))
+            self.view.actions = Array(actions.prefix(12))
             self.view.message = self.view.actions.isEmpty ? "가능한 작업\n없음" : "항목 위에서\n놓으세요"
         }
     }

@@ -36,7 +36,7 @@ export MACOSX_DEPLOYMENT_TARGET=15.0
 
 # A file named main.swift is required for top-level entry points with several Swift files.
 cp packaging/macos/MagicConverter.swift "$work/main.swift"
-xcrun swiftc -swift-version 5 -O -target "$arch-apple-macosx15.0" "$work/main.swift" packaging/macos/Wheel.swift -o "$bundle/MacOS/MagicConverter"
+xcrun swiftc -swift-version 5 -O -target "$arch-apple-macosx15.0" "$work/main.swift" packaging/macos/Wheel.swift packaging/macos/Settings.swift -o "$bundle/MacOS/MagicConverter"
 if [ -n "${MAGIC_CONVERTER_ENGINE_APP:-}" ]; then
   # UI-only builds may reuse a hash-verified package of the unchanged 3.0.5 engine.
   install -m 755 "$MAGIC_CONVERTER_ENGINE_APP/Contents/MacOS/magic_converter-cli" "$bundle/MacOS/magic_converter-cli"
@@ -48,6 +48,7 @@ else
   install -m 755 "$target/$triple/release/magic_converter_mcp" "$bundle/MacOS/magic_converter-mcp"
 fi
 install -m 644 packaging/macos/Info.plist "$bundle/Info.plist"
+install -m 644 rust/magic-converter/catalog.json "$bundle/Resources/catalog.json"
 install -m 644 LICENSE "$bundle/Resources/Notices/LICENSE-MagicConverter"
 iconset="$work/AppIcon.iconset"
 mkdir "$iconset"

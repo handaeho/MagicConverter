@@ -26,14 +26,13 @@ private final class DropView: NSView {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL])
+        registerForDraggedTypes([.fileURL, .URL])
     }
 
     required init?(coder: NSCoder) { return nil }
 
     private func files(_ info: NSDraggingInfo) -> [URL] {
-        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
-        return info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL] ?? []
+        draggedFiles(info.draggingPasteboard)
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
@@ -51,7 +50,7 @@ private final class DropView: NSView {
 
 private final class App: NSObject, NSApplicationDelegate {
     private let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
+        contentRect: NSRect(x: 0, y: 0, width: 760, height: 500),
         styleMask: [.titled, .closable, .miniaturizable, .resizable],
         backing: .buffered, defer: false)
     private let dropView = DropView(frame: .zero)
@@ -64,6 +63,11 @@ private final class App: NSObject, NSApplicationDelegate {
     private let clear = NSButton(title: "지우기", target: nil, action: nil)
     private let progress = NSProgressIndicator()
     private let wheel = DragWheel()
+    private let profile = MacProfile()
+    private lazy var settings = SettingsWindow(profile: profile)
+    private let convertProfile = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let quickProfile = NSPopUpButton(frame: .zero, pullsDown: false)
+    private var service: Process?
     private var statusItem: NSStatusItem!
     private let wheelEnabled = NSButton(checkboxWithTitle: "드래그 감지 사용", target: nil, action: nil)
     private let releaseModifier = NSButton(checkboxWithTitle: "휠 안에서 보조키를 놓아야 실행", target: nil, action: nil)
@@ -111,22 +115,36 @@ private final class App: NSObject, NSApplicationDelegate {
         statusMenu.addItem(withTitle: "MagicConverter 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         statusItem.menu = statusMenu
 
-        wheelEnabled.state = UserDefaults.standard.object(forKey: "dragEnabled") as? Bool == false ? .off : .on
-        releaseModifier.state = UserDefaults.standard.bool(forKey: "releaseModifier") ? .on : .off
+        wheelEnabled.state = profile.values["enabled"] as? Bool == false ? .off : .on
+        releaseModifier.state = profile.values["release_modifier_inside"] as? Bool == true ? .on : .off
         for control in [wheelEnabled, releaseModifier] {
             control.target = self
             control.action = #selector(saveDragSettings)
         }
         wheelEnabled.toolTip = "Finder에서 Shift 또는 Ctrl을 누른 드래그의 휠 표시 여부"
         releaseModifier.toolTip = "휠 항목 안에서 보조키를 놓은 후 파일을 놓아야 실행하는 설정"
-        saveDragSettings()
-        wheel.onQuery = { [weak self] files, _, completion in self?.available(files, completion: completion) }
+        for popup in [convertProfile, quickProfile] {
+            popup.target = self
+            popup.action = #selector(saveDragSettings)
+        }
+        profile.changed = { [weak self] in self?.applyProfile() }
+        applyProfile()
+        settings.command = { [weak self] arguments in
+            guard let self else { return [:] }
+            return try JSONSerialization.jsonObject(with: Self.invoke(self.cli, arguments)) as? [String: Any] ?? [:]
+        }
+        settings.restartService = { [weak self] in self?.reloadService() }
+        wheel.onQuery = { [weak self] files, mode, completion in
+            self?.available(files) { [weak self] actions in
+                completion(self?.profile.slots(for: mode, available: actions) ?? [])
+            }
+        }
         wheel.onChoose = { [weak self] action, files in self?.execute(action, files: files) }
         wheel.start()
 
         window.title = "MagicConverter 3.0.5"
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 560, height: 400)
+        window.minSize = NSSize(width: 720, height: 490)
         window.contentView = dropView
         window.center()
         dropView.onFiles = { [weak self] in self?.setFiles($0) }
@@ -155,11 +173,14 @@ private final class App: NSObject, NSApplicationDelegate {
         let stack = NSStackView(views: [
             title, input,
             row([wheelEnabled, releaseModifier]),
+            row([NSTextField(labelWithString: "Shift 변환 휠"), convertProfile, NSTextField(labelWithString: "Ctrl 작업 휠"), quickProfile]),
             row([button("파일 선택…", #selector(chooseFiles)), clear]),
             NSTextField(labelWithString: "변환 작업"), actions,
             NSTextField(labelWithString: "저장 위치"), destination,
             row([button("폴더 선택…", #selector(chooseFolder)), button("원본 폴더 사용", #selector(useSourceFolder))]),
-            row([run, reveal, progress]), detail
+            row([run, reveal, progress]), detail,
+            row([button("작업 관리…", #selector(showTasks)), button("결과 기록…", #selector(showHistory)),
+                   button("프리셋 편집…", #selector(showPresets)), button("고급 설정…", #selector(showAdvanced))])
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -183,6 +204,7 @@ private final class App: NSObject, NSApplicationDelegate {
         notificationPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         notificationText.frame = NSRect(x: 16, y: 16, width: 308, height: 64)
         notificationPanel.contentView?.addSubview(notificationText)
+        if !ProcessInfo.processInfo.arguments.contains("--smoke-test") { startService() }
         if ProcessInfo.processInfo.arguments.contains("--smoke-test") {
             DispatchQueue.main.async {
                 exit(self.window.isVisible && self.checkVersion() ? 0 : 1)
@@ -201,7 +223,9 @@ private final class App: NSObject, NSApplicationDelegate {
         return true
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        busy ? .terminateCancel : .terminateNow
+        if busy { notify("변환 작업이 진행 중입니다. 완료 후 종료할 수 있습니다."); return .terminateCancel }
+        service?.terminate()
+        return .terminateNow
     }
 
     @objc private func showWindow() {
@@ -211,10 +235,70 @@ private final class App: NSObject, NSApplicationDelegate {
     }
 
     @objc private func saveDragSettings() {
+        profile.values["enabled"] = wheelEnabled.state == .on
+        profile.values["release_modifier_inside"] = releaseModifier.state == .on
+        profile.values["convert_profile"] = convertProfile.selectedItem?.representedObject as? String ?? ""
+        profile.values["action_profile"] = quickProfile.selectedItem?.representedObject as? String ?? ""
+        do { try profile.save() } catch { detail.stringValue = "설정 저장 실패 · \(error.localizedDescription)" }
+    }
+
+    private func applyProfile() {
+        wheelEnabled.state = profile.values["enabled"] as? Bool == false ? .off : .on
+        releaseModifier.state = profile.values["release_modifier_inside"] as? Bool == true ? .on : .off
         wheel.enabled = wheelEnabled.state == .on
         wheel.requireRelease = releaseModifier.state == .on
-        UserDefaults.standard.set(wheel.enabled, forKey: "dragEnabled")
-        UserDefaults.standard.set(wheel.requireRelease, forKey: "releaseModifier")
+        wheel.threshold = CGFloat(max(5, min(80, profile.values["threshold"] as? Int ?? 15)))
+        wheel.interval = Double(max(30, min(50, profile.values["interval_ms"] as? Int ?? 35))) / 1000
+        wheel.start()
+        for (popup, mode, key) in [(convertProfile, "convert", "convert_profile"), (quickProfile, "action", "action_profile")] {
+            popup.removeAllItems()
+            popup.addItem(withTitle: "자동")
+            popup.lastItem?.representedObject = ""
+            for group in profile.profiles where group["mode"] as? String == mode {
+                popup.addItem(withTitle: group["name"] as? String ?? "휠")
+                popup.lastItem?.representedObject = group["id"] as? String ?? ""
+            }
+            let selected = profile.values[key] as? String ?? ""
+            popup.selectItem(at: popup.itemArray.firstIndex(where: { $0.representedObject as? String == selected }) ?? 0)
+        }
+    }
+
+    @objc private func showAdvanced() { settings.show(0) }
+    @objc private func showPresets() { settings.show(1) }
+    @objc private func showTasks() { settings.show(3) }
+    @objc private func showHistory() { settings.show(4) }
+
+    private func startService() {
+        guard service?.isRunning != true else { return }
+        do {
+            try FileManager.default.createDirectory(at: profile.directory, withIntermediateDirectories: true)
+            let log = profile.directory.appendingPathComponent("service.log")
+            FileManager.default.createFile(atPath: log.path, contents: nil)
+            let output = try FileHandle(forWritingTo: log)
+            let process = Process()
+            process.executableURL = cli
+            process.arguments = ["serve"]
+            process.standardOutput = output
+            process.standardError = output
+            try process.run()
+            service = process
+        } catch { detail.stringValue = "자동화 서비스 시작 실패 · \(error.localizedDescription)" }
+    }
+
+    private func reloadService() {
+        guard !busy else { notify("현재 변환이 끝난 뒤 감시 규칙을 적용하세요."); return }
+        let cli = cli
+        work.async {
+            let result = try? Self.invoke(cli, ["status"])
+            let status = result.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            if let jobs = status?["jobs"] as? [Any], !jobs.isEmpty {
+                DispatchQueue.main.async { self.notify("감시 작업이 실행 중입니다. 완료 후 규칙을 적용하세요.") }
+                return
+            }
+            if let instance = status?["instance"] as? String { _ = try? Self.invoke(cli, ["stop", "--instance", instance]) }
+            self.service?.waitUntilExit()
+            DispatchQueue.main.async { self.startService() }
+        }
     }
 
     private func notify(_ text: String) {
@@ -253,7 +337,7 @@ private final class App: NSObject, NSApplicationDelegate {
         guard !busy else { completion([]); return }
         let cli = cli
         work.async {
-            let data = try? Self.invoke(cli, ["available", "--"] + files.map(\.path))
+            let data = try? Self.invoke(cli, ["available", "--"] + files.map(Self.argument))
             let choices = data.flatMap { try? JSONDecoder().decode(Choices.self, from: $0) }
             var actions = choices?.actions.map { WheelAction(key: $0.key, label: $0.label) } ?? []
             if files.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
@@ -308,7 +392,7 @@ private final class App: NSObject, NSApplicationDelegate {
     private func setFiles(_ urls: [URL]) {
         guard !busy else { return }
         var seen = Set<URL>()
-        files = urls.filter { $0.isFileURL && seen.insert($0.standardizedFileURL).inserted }
+        files = urls.filter { ($0.isFileURL || ["https", "http"].contains($0.scheme ?? "")) && seen.insert($0).inserted }
         let files = files
         input.stringValue = files.isEmpty ? "Finder에서 파일을 이 창에 놓거나 파일을 선택하세요." :
             files.prefix(4).map(\.lastPathComponent).joined(separator: "\n") +
@@ -325,7 +409,7 @@ private final class App: NSObject, NSApplicationDelegate {
         guard !files.isEmpty else { return }
         let cli = cli
         work.async {
-            let result = Result { try Self.invoke(cli, ["available", "--"] + files.map(\.path)) }
+            let result = Result { try Self.invoke(cli, ["available", "--"] + files.map(Self.argument)) }
             DispatchQueue.main.async {
                 guard self.query == token else { return }
                 self.actions.removeAllItems()
@@ -372,9 +456,11 @@ private final class App: NSObject, NSApplicationDelegate {
             return
         }
         let cli = cli
-        var arguments = ["convert", "--action", action.key]
+        var arguments = ["convert"]
+        if let preset = action.presetID { arguments += ["--preset", preset] }
+        else { arguments += ["--action", action.key] }
         if let output { arguments += ["--output", output.path] }
-        arguments += ["--"] + files.map(\.path)
+        arguments += ["--"] + files.map(Self.argument)
         busy = true
         run.isEnabled = false
         reveal.isEnabled = false
@@ -414,6 +500,8 @@ private final class App: NSObject, NSApplicationDelegate {
         guard let data = try? Self.invoke(cli, ["--version"]) else { return false }
         return String(decoding: data, as: UTF8.self).contains("3.0.5")
     }
+
+    private static func argument(_ url: URL) -> String { url.isFileURL ? url.path : url.absoluteString }
 
     private static func invoke(_ cli: URL, _ arguments: [String]) throws -> Data {
         let process = Process()

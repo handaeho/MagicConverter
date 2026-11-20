@@ -169,7 +169,7 @@ pub(super) fn rules(catalog: &Catalog, directory: &Path) -> Result<Vec<ValidRule
     Ok(rules)
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(super) fn running_rules(rules: &[ValidRule]) -> bool {
     rules.iter().any(|item| item.rule.enabled)
 }

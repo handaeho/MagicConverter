@@ -1,0 +1,56 @@
+name: macOS interaction verification
+on:
+  push:
+    branches: ['codex/macos-parity']
+    paths: ['packaging/macos/**', 'tools/validation/verify_macos*', '.github/workflows/macos-ui.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  interaction:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            sha: ecb6685affa8ce208af00ad6cf2ea686189a763035298f6638e73f6f18c1649a
+          - runner: macos-15-intel
+            arch: x86_64
+            sha: 96079fae47800065e47a62061e9c8917ed4b01add58d70245434d04bcf1d4014
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Verify native interaction with the released conversion engine
+        shell: bash
+        run: |
+          export MAGIC_CONVERTER_PROFILE_DIR="$RUNNER_TEMP/profile"
+          name="MagicConverter-3.0.5-macOS-${{ matrix.arch }}.zip"
+          curl --fail --silent --show-error --location --retry 2 -o "$RUNNER_TEMP/engine.zip" "https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/$name"
+          printf '%s  %s\n' '${{ matrix.sha }}' "$RUNNER_TEMP/engine.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/engine.zip" "$RUNNER_TEMP/engine"
+          export MAGIC_CONVERTER_ENGINE_APP="$RUNNER_TEMP/engine/MagicConverter.app"
+          bash packaging/macos/build.sh "$RUNNER_TEMP/release"
+          app="$RUNNER_TEMP/release/MagicConverter.app"
+          xcrun swiftc tools/validation/verify_macos_launch.swift -o "$RUNNER_TEMP/check-window"
+          xcrun swiftc tools/validation/verify_macos_drag.swift -o "$RUNNER_TEMP/check-drag"
+          /usr/bin/open -n -a "$app"
+          "$RUNNER_TEMP/check-window" "$app" --keep-running
+          mkdir "$RUNNER_TEMP/drag-test"
+          sips -z 40 40 assets/magic_converter-tool.png --out "$RUNNER_TEMP/drag-test/drag.png" >/dev/null
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$RUNNER_TEMP/drag-test/drag_converted.jpg" "$app/Contents/MacOS/magic_converter-cli"
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" control "$RUNNER_TEMP/drag-test/drag_converted.png" "$app/Contents/MacOS/magic_converter-cli"
+      - name: Capture interaction diagnostics
+        if: always()
+        shell: bash
+        run: |
+          screencapture -x "$RUNNER_TEMP/interaction.png" || true
+          /usr/bin/log show --last 4m --style compact --predicate 'process == "MagicConverter"' | tail -60
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: macOS-interaction-${{ matrix.arch }}
+          path: ${{ runner.temp }}/interaction.png
