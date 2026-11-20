@@ -93,7 +93,12 @@ jobs:
           "$py" tools/validation/verify_macos_automation.py --worker "$bin/magic_converter-cli" --image "$RUNNER_TEMP/drag-test/drag.png" --output "$RUNNER_TEMP/automation-test"
           "$app/Contents/vendor/ffmpeg/ffmpeg" -hide_banner -loglevel error -f lavfi -i testsrc2=size=1920x1080:rate=30 -t 8 -c:v libx264 -preset ultrafast "$RUNNER_TEMP/cancel-test.mp4"
           "$py" tools/validation/verify_rust_mcp.py --worker "$bin/magic_converter-cli" --server "$bin/magic_converter-mcp" --media "$RUNNER_TEMP/cancel-test.mp4" --output "$RUNNER_TEMP/mcp-test"
-          "$py" tools/validation/verify_macos_conversions.py --worker "$bin/magic_converter-cli" --output "$RUNNER_TEMP/conversions" --reference tests/fixtures/macos/windows-execution.json
+          # Deny access to build-machine Homebrew so missing bundled engines
+          # cannot accidentally pass the offline deployment comparison.
+          printf '(version 1)(allow default)(deny file-read* (subpath "/opt/homebrew") (subpath "/usr/local/Cellar") (subpath "/usr/local/opt"))\n' > "$RUNNER_TEMP/no-homebrew.sb"
+          printf '#!/bin/sh\nexec /usr/bin/sandbox-exec -f "%s" "%s" "$@"\n' "$RUNNER_TEMP/no-homebrew.sb" "$bin/magic_converter-cli" > "$RUNNER_TEMP/offline-cli"
+          chmod 755 "$RUNNER_TEMP/offline-cli"
+          "$py" tools/validation/verify_macos_conversions.py --worker "$RUNNER_TEMP/offline-cli" --output "$RUNNER_TEMP/conversions" --reference tests/fixtures/macos/windows-execution.json
           cp "$RUNNER_TEMP/conversions/verification.json" "$RUNNER_TEMP/release/conversions-${{ matrix.arch }}.json"
           # Exercise the actual Installer package and the app's native removal menu.
           osascript -e 'tell application id "com.handaeho.magicconverter" to quit'
