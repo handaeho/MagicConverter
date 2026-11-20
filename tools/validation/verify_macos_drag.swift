@@ -2,10 +2,12 @@ import AppKit
 import CoreGraphics
 import WebKit
 
-private final class SourceView: NSView, NSDraggingSource {
+private final class SourceView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
     let file: URL
-    init(file: URL) {
+    let delivery: String
+    init(file: URL, delivery: String) {
         self.file = file
+        self.delivery = delivery
         super.init(frame: NSRect(x: 0, y: 0, width: 260, height: 200))
     }
     required init?(coder: NSCoder) { nil }
@@ -16,12 +18,28 @@ private final class SourceView: NSView, NSDraggingSource {
     }
     override func mouseDown(with event: NSEvent) { }
     override func mouseDragged(with event: NSEvent) {
-        let item = NSDraggingItem(pasteboardWriter: file as NSURL)
+        let writer: NSPasteboardWriting
+        if delivery == "promise" {
+            writer = NSFilePromiseProvider(fileType: "public.png", delegate: self)
+        } else if delivery == "raw" {
+            let board = NSPasteboardItem()
+            board.setData(try! Data(contentsOf: file), forType: .png)
+            writer = board
+        } else { writer = file as NSURL }
+        let item = NSDraggingItem(pasteboardWriter: writer)
         item.setDraggingFrame(NSRect(x: 95, y: 75, width: 64, height: 64), contents: NSWorkspace.shared.icon(forFile: file.path))
         beginDraggingSession(with: [item], event: event, source: self)
     }
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
         [.copy, .generic, .link]
+    }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+        "promised.png"
+    }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL,
+                             completionHandler: @escaping (Error?) -> Void) {
+        do { try FileManager.default.copyItem(at: file, to: url); completionHandler(nil) }
+        catch { completionHandler(error) }
     }
 }
 
@@ -59,7 +77,10 @@ let file = URL(fileURLWithPath: arguments[1])
 let quick = arguments[2] == "control"
 let finder = arguments.contains("--finder")
 let browser = arguments.contains("--web")
+let delivery = arguments.contains("--promise") ? "promise" : (arguments.contains("--raw") ? "raw" : "file")
+let transient = browser || delivery != "file"
 let resultPath = URL(fileURLWithPath: arguments[3])
+let existing = Set(((try? FileManager.default.contentsOfDirectory(atPath: resultPath.path)) ?? []))
 let cli = Process()
 cli.executableURL = URL(fileURLWithPath: arguments[4])
 cli.arguments = ["available", "--", file.path]
@@ -85,7 +106,7 @@ app.setActivationPolicy(.regular)
 let source = NSWindow(contentRect: NSRect(x: 35, y: 120, width: 260, height: 200),
                       styleMask: [.titled], backing: .buffered, defer: false)
 source.title = "Native drag test source"
-source.contentView = SourceView(file: file)
+source.contentView = SourceView(file: file, delivery: delivery)
 if browser {
     let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 260, height: 200))
     source.contentView = view
@@ -164,8 +185,8 @@ DispatchQueue.global().async {
     key(code, down: false, flags: [])
     for _ in 0..<50 {
         Thread.sleep(forTimeInterval: 0.1)
-        let created = browser
-            ? ((try? FileManager.default.contentsOfDirectory(at: resultPath, includingPropertiesForKeys: nil)) ?? []).contains { $0.pathExtension == "jpg" }
+        let created = transient
+            ? ((try? FileManager.default.contentsOfDirectory(at: resultPath, includingPropertiesForKeys: nil)) ?? []).contains { $0.pathExtension == "jpg" && !existing.contains($0.lastPathComponent) }
             : FileManager.default.fileExists(atPath: resultPath.path)
         if created {
             print("PASS: \(arguments[2]) cross-process file drag displayed the wheel and created \(resultPath.lastPathComponent).")
