@@ -24,6 +24,17 @@
 #include <QUrl>
 
 class LocalDocument : public QTextDocument {
+public:
+    LocalDocument() {
+#ifdef Q_OS_MAC
+        // Keep optional Latin ligatures as their original searchable characters.
+        // Required shaping (for example Arabic) remains enabled.
+        QFont font = defaultFont();
+        font.setFeature(QFont::Tag("liga"), 0);
+        font.setFeature(QFont::Tag("clig"), 0);
+        setDefaultFont(font);
+#endif
+    }
 protected:
     QVariant loadResource(int type, const QUrl& url) override {
         if (url.scheme() != "data") return {};
