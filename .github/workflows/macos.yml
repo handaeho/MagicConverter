@@ -59,7 +59,7 @@ jobs:
           "$bin/magic_converter-cli" actions >/dev/null
           python3 -m venv "$RUNNER_TEMP/python"
           py="$RUNNER_TEMP/python/bin/python"
-          "$py" -m pip install --disable-pip-version-check 'pymupdf==1.28.2' python-docx pillow
+          "$py" -m pip install --disable-pip-version-check 'pymupdf==1.28.2' python-docx pillow pillow-heif
           "$py" tools/validation/verify_rust_pdf_pptx_layout.py --candidate "$bin/magic_converter-cli" --output "$RUNNER_TEMP/pdf-test"
           "$py" tools/validation/verify_rust_word_photo_table.py --candidate "$bin/magic_converter-cli" --rhwp "$app/Contents/vendor/rhwp/rhwp" --output "$RUNNER_TEMP/word-test"
           "$bin/magic_converter-cli" available -- "$RUNNER_TEMP/pdf-test/layout.pdf" | grep '"pptx_editable"'
@@ -71,6 +71,7 @@ jobs:
           "$py" -c 'from PIL import Image; import sys; Image.new("RGB", (40, 30), (52, 91, 140)).save(sys.argv[1])' "$RUNNER_TEMP/drag-test/drag.png"
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$RUNNER_TEMP/drag-test/drag_converted.jpg" "$bin/magic_converter-cli"
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" control "$RUNNER_TEMP/drag-test/drag_converted.png" "$bin/magic_converter-cli"
+          "$py" tools/validation/verify_macos_conversions.py --worker "$bin/magic_converter-cli" --output "$RUNNER_TEMP/conversions" --reference tests/fixtures/macos/windows-execution.json
           printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' \
             "$(uname -m)" > "$RUNNER_TEMP/release/verification-${{ matrix.arch }}.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -82,6 +83,7 @@ jobs:
             ${{ runner.temp }}/release/*.pkg
             ${{ runner.temp }}/release/*.sha256
             ${{ runner.temp }}/release/verification-*.txt
+            ${{ runner.temp }}/conversions/verification.json
       - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         if: always()
         with:

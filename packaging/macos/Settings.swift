@@ -1,5 +1,26 @@
 import AppKit
 
+private final class NumberField: NSStackView {
+    let text: NSTextField
+    private let stepper = NSStepper()
+    init(_ value: Int, minimum: Int, maximum: Int) {
+        text = NSTextField(string: String(value))
+        super.init(frame: .zero)
+        text.isEditable = false
+        text.widthAnchor.constraint(equalToConstant: 100).isActive = true
+        stepper.minValue = Double(minimum)
+        stepper.maxValue = Double(maximum)
+        stepper.integerValue = value
+        stepper.target = self
+        stepper.action = #selector(adjust)
+        addArrangedSubview(text)
+        addArrangedSubview(stepper)
+        spacing = 6
+    }
+    required init?(coder: NSCoder) { nil }
+    @objc private func adjust() { text.integerValue = stepper.integerValue }
+}
+
 final class MacProfile {
     let directory: URL
     let catalog: [String: Any]
@@ -60,11 +81,12 @@ final class SettingsWindow: NSObject {
     private let tabs = NSSegmentedControl(labels: ["고급 설정", "프리셋", "휠 구성", "작업 관리", "결과 기록"], trackingMode: .selectOne, target: nil, action: nil)
     private let content = NSScrollView()
     private let status = NSTextField(wrappingLabelWithString: "")
-    private var fields: [String: NSControl] = [:]
+    private var fields: [String: NSView] = [:]
     private var presetIndex = 0
     private var groupIndex = 0
     private var ruleIndex = 0
     private var jobs: [[String: Any]] = []
+    private var historyOutputs: [String: [URL]] = [:]
     var command: (([String]) throws -> [String: Any])?
     var restartService: (() -> Void)?
     var cancelConversion: (() -> Void)?
@@ -138,8 +160,15 @@ final class SettingsWindow: NSObject {
     }
 
     private func value(_ key: String) -> String {
+        if let number = fields[key] as? NumberField { return number.text.stringValue }
         if let popup = fields[key] as? NSPopUpButton { return popup.selectedItem?.representedObject as? String ?? "" }
         return (fields[key] as? NSTextField)?.stringValue ?? ""
+    }
+
+    private func number(_ key: String, _ value: Int, minimum: Int = 0, maximum: Int = 100000) -> NSView {
+        let field = NumberField(value, minimum: minimum, maximum: maximum)
+        fields[key] = field
+        return field
     }
 
     private func row(_ label: String, _ control: NSView) -> [NSView] {
@@ -202,20 +231,27 @@ final class SettingsWindow: NSObject {
         let selector = choice("preset", presets.enumerated().map { ($0.element["name"] as? String ?? "", String($0.offset)) }, String(presetIndex))
         selector.target = self
         selector.action = #selector(selectPreset)
-        return [
+        var rows = [
             row("프리셋", selector),
             row("이름", text("name", preset["name"] as? String ?? "")),
             row("작업", choice("action", profile.actions.map { ($0["label"] as! String, $0["key"] as! String) }, preset["action_key"] as? String ?? "image:jpg")),
             row("이미지 품질", numbers("quality", Array(stride(from: 10, through: 100, by: 5)), options["image_quality"] as? Int ?? 90)),
             row("최대 이미지 변 (px)", numbers("edge", [0, 640, 1280, 1920, 2560, 3840], options["image_max_edge"] as? Int ?? 0)),
-            row("동영상 CRF", numbers("crf", [0, 18, 20, 23, 26, 28, 32], options["video_crf"] as? Int ?? 23)),
-            row("오디오 비트레이트", numbers("bitrate", [64, 96, 128, 160, 192, 256, 320], options["audio_bitrate"] as? Int ?? 192)),
+            row("동영상 CRF", choice("crf", [("자동", "")] + [0, 18, 20, 23, 26, 28, 32].map { (String($0), String($0)) }, (options["video_crf"] as? Int).map(String.init) ?? "")),
+            row("오디오 비트레이트", choice("bitrate", [("자동", "")] + [64, 96, 128, 160, 192, 256, 320].map { (String($0), String($0)) }, (options["audio_bitrate"] as? Int).map(String.init) ?? "")),
             row("PDF 페이지", text("pages", tools["pdf_pages"] as? String ?? "")),
             row("회전", numbers("rotation", [90, 180, 270], tools["rotation"] as? Int ?? 90)),
             row("반전", choice("flip", [("좌우", "horizontal"), ("상하", "vertical")], tools["flip"] as? String ?? "horizontal")),
-            row("자막 이동 (ms)", text("offset", String(tools["subtitle_offset_ms"] as? Int ?? 1000))),
-            row("", NSStackView(views: [button("저장", #selector(savePreset)), button("새 프리셋", #selector(addPreset)), button("삭제", #selector(deletePreset))]))
+            row("자막 이동 (ms)", number("offset", tools["subtitle_offset_ms"] as? Int ?? 1000, minimum: -604800000, maximum: 604800000))
         ]
+        for (key, title, fallback, maximum) in [
+            ("crop_x", "자르기 시작 X", 0, 100000), ("crop_y", "자르기 시작 Y", 0, 100000),
+            ("crop_width", "자르기 너비", 0, 100000), ("crop_height", "자르기 높이", 0, 100000),
+            ("start_ms", "구간 시작 (ms)", 0, 604800000), ("duration_ms", "구간 길이 (ms)", 0, 604800000),
+            ("frame_interval", "프레임 추출 간격", 1, 10000), ("max_frames", "최대 추출 프레임", 10000, 100000)
+        ] { rows.append(row(title, number(key, tools[key] as? Int ?? fallback, minimum: ["frame_interval", "max_frames"].contains(key) ? 1 : 0, maximum: maximum))) }
+        rows.append(row("", NSStackView(views: [button("저장", #selector(savePreset)), button("새 프리셋", #selector(addPreset)), button("삭제", #selector(deletePreset))])))
+        return rows
     }
 
     private func groupRows() -> [[NSView]] {
@@ -274,11 +310,21 @@ final class SettingsWindow: NSObject {
         let data = (try? JSONSerialization.jsonObject(with: Data(contentsOf: path))) as? [String: Any]
         let entries = data?["entries"] as? [[String: Any]] ?? []
         if entries.isEmpty { return [row("결과 기록", NSTextField(labelWithString: "아직 변환 기록이 없습니다."))] }
+        historyOutputs = [:]
         return entries.reversed().prefix(200).map { entry in
             let files = entry["files"] as? [[String: Any]] ?? []
             let sources = files.compactMap { $0["source"] as? String }
-            return row(entry["label"] as? String ?? "변환", NSTextField(wrappingLabelWithString: sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")))
+            let id = entry["id"] as? String ?? UUID().uuidString
+            historyOutputs[id] = files.flatMap { $0["outputs"] as? [String] ?? [] }.map { URL(fileURLWithPath: $0) }
+            let reveal = button("결과 위치", #selector(revealHistory))
+            reveal.identifier = NSUserInterfaceItemIdentifier(id)
+            reveal.isEnabled = !(historyOutputs[id] ?? []).isEmpty
+            return row(entry["label"] as? String ?? "변환", NSStackView(views: [NSTextField(wrappingLabelWithString: sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")), reveal]))
         }
+    }
+
+    @objc private func revealHistory(_ sender: NSButton) {
+        NSWorkspace.shared.activateFileViewerSelecting(historyOutputs[sender.identifier?.rawValue ?? ""] ?? [])
     }
 
     private func persist() {
@@ -309,7 +355,26 @@ final class SettingsWindow: NSObject {
         tools["rotation"] = Int(value("rotation"))
         tools["flip"] = value("flip")
         tools["subtitle_offset_ms"] = offset
+        for key in ["crop_x", "crop_y", "crop_width", "crop_height", "start_ms", "duration_ms", "frame_interval", "max_frames"] { tools[key] = Int(value(key)) }
         preset["tools"] = tools
+        let action = value("action")
+        let toolFields: [String: [String]] = [
+            "tool:pdf_select": ["pdf_pages"], "tool:pdf_split": ["pdf_pages"], "tool:pdf_rotate": ["pdf_pages", "rotation"],
+            "tool:image_rotate": ["rotation"], "tool:image_flip": ["flip"],
+            "tool:image_crop": ["crop_x", "crop_y", "crop_width", "crop_height"],
+            "tool:image_frames": ["frame_interval", "max_frames"], "tool:media_trim": ["start_ms", "duration_ms"],
+            "tool:media_frames": ["start_ms", "duration_ms", "frame_interval", "max_frames"], "tool:subtitle_shift": ["subtitle_offset_ms"]
+        ]
+        let defaults = (profile.catalog["default_preferences"] as! [String: Any])["presets"] as! [[String: Any]]
+        let defaultTools = defaults[0]["tools"] as! [String: Any]
+        for (key, defaultValue) in defaultTools where !(toolFields[action] ?? []).contains(key) { tools[key] = defaultValue }
+        preset["tools"] = tools
+        let video = ["media:mp4", "media:mov", "media:mkv", "media:webm"].contains(action)
+        let audio = ["media:mp4", "media:mov", "media:mkv", "media:webm", "media:avi", "media:wmv", "media:mp3", "audio:m4a", "audio:ogg", "audio:opus", "audio:wma"].contains(action)
+        if !action.hasPrefix("image:") { options["image_quality"] = 90; options["image_max_edge"] = 0 }
+        if !video { options["video_crf"] = NSNull() }
+        if !audio { options["audio_bitrate"] = NSNull() }
+        preset["options"] = options
         presets[presetIndex] = preset
         profile.values["presets"] = presets
         persist()
