@@ -35,23 +35,28 @@ pub fn convert(
     warnings: &mut Vec<String>,
 ) -> io::Result<()> {
     let bundled = std::env::current_exe().ok().and_then(|executable| {
-        executable.ancestors().skip(1).map(|root| {
-            root.join("vendor/office/LibreOffice.app/Contents/MacOS/soffice")
-        }).find(|path| path.is_file())
+        executable
+            .ancestors()
+            .skip(1)
+            .map(|root| root.join("vendor/office/LibreOffice.app/Contents/MacOS/soffice"))
+            .find(|path| path.is_file())
     });
     let needs_office = edge.source == "ppt" || edge.action_key == "office:xlsx_print_pdf";
-    let renderer = bundled.filter(|_| needs_office).into_iter().chain([
-        PathBuf::from("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
-        PathBuf::from("/usr/local/bin/soffice"),
-        PathBuf::from("/opt/homebrew/bin/soffice"),
-    ])
-    .find(|path| path.is_file())
-    .ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            "설치된 Office PDF 출력 프로그램을 찾지 못했습니다.",
-        )
-    })?;
+    let renderer = bundled
+        .filter(|_| needs_office)
+        .into_iter()
+        .chain([
+            PathBuf::from("/Applications/LibreOffice.app/Contents/MacOS/soffice"),
+            PathBuf::from("/usr/local/bin/soffice"),
+            PathBuf::from("/opt/homebrew/bin/soffice"),
+        ])
+        .find(|path| path.is_file())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "설치된 Office PDF 출력 프로그램을 찾지 못했습니다.",
+            )
+        })?;
     let stage = tempfile::tempdir()?;
     let generated = stage.path().join("output");
     std::fs::create_dir(&generated)?;
