@@ -1,4 +1,4 @@
-# MagicConverter 3.0.5 — Windows 파일 변환기
+# MagicConverter 3.0.5 — Windows·macOS 파일 변환기
 
 탐색기나 Finder에서 파일을 끌어 문서, PDF, 이미지, 표와 미디어를 변환하는 Windows·macOS 앱입니다.
 
@@ -8,8 +8,7 @@
 
 [MagicConverter 3.0.5 Windows x64 설치 ZIP 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5/MagicConverter-3.0.5-Windows-x64.zip)
 
-Windows 10·11 x64용 Rust 앱입니다. <br>
-설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있어 인터넷 연결과 Python 없이 설치하고 사용할 수 있습니다.
+Windows 10·11 x64용 Rust 앱입니다. 설치 프로그램에 FFmpeg·FFprobe, rhwp와 필수 변환 엔진이 포함되어 있어 인터넷 연결과 Python 없이 설치하고 사용할 수 있습니다.
 
 1. ZIP을 풀고 `magic_converter-setup.exe`를 더블클릭합니다. 설치 마법사의 환영 화면에서 **다음**을 누르고 라이선스 조건에 동의합니다.
 2. 기본 설치 위치를 사용하거나 **찾아보기**에서 상위 폴더를 고릅니다. 실제 설치 위치를 확인한 뒤 **설치**를 누릅니다.
@@ -27,14 +26,17 @@ PDF → PPTX의 **편집 복원**은 흐름도 라벨을 원래 위치에 유지
 
 [설치 및 업그레이드](docs/user/PUBLIC_WINDOWS.md) · [제거 안내](docs/user/UNINSTALL_WINDOWS.md) · [3.0.5 변경 사항](docs/release/3.0.5.md) · [릴리스 목록](https://github.com/handaeho/MagicConverter/releases)
 
-일반 PNG 변환은 지원하는 EXIF 정보를 보존합니다. <br> 
-공유용 파일에서 작성자나 위치 등 메타데이터를 지우려면 도구 휠에서 **메타데이터 제거**를 선택하세요.
+일반 PNG 변환은 지원하는 EXIF 정보를 보존합니다. 공유용 파일에서 작성자나 위치 등 메타데이터를 지우려면 도구 휠에서 **메타데이터 제거**를 선택하세요.
 
 ## macOS로 시작하기
 
-macOS 15 이상을 지원합니다. Mac의 칩에 맞는 ZIP을 풀어 `MagicConverter.app`을 **응용 프로그램**으로 옮기세요.
+macOS 15 이상을 지원합니다. Mac의 칩에 맞는 **PKG 설치 마법사**를 실행하거나 ZIP의 `MagicConverter.app`을 **응용 프로그램**으로 옮기세요. Apple M 계열은 Apple Silicon용입니다.
 
-[Apple Silicon 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/MagicConverter-3.0.5-macOS-arm64.zip) · [Intel 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/MagicConverter-3.0.5-macOS-x86_64.zip) · [설치 및 지원 범위](docs/user/MACOS.md)
+[Apple Silicon 설치 PKG](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.2/MagicConverter-3.0.5-macOS-arm64.pkg) · [Intel 설치 PKG](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.2/MagicConverter-3.0.5-macOS-x86_64.pkg) · [ZIP 및 설치 안내](docs/user/MACOS.md)
+
+Finder에서 파일을 먼저 끌고 **Shift**를 누르면 변환 휠이, **Control**을 누르면 빠른 작업 휠이 나타납니다. 원하는 항목 위에 파일을 놓으세요. macOS의 Control+클릭은 보조 클릭이므로 드래그를 시작한 뒤 Control을 누릅니다. 브라우저의 이미지 드래그, 프리셋·휠 편집, 폴더 감시, 결과 기록, 오른쪽 아래 진행창과 메뉴 막대 아이콘을 제공합니다.
+
+FFmpeg·FFprobe, Qt, MuPDF, PDFium, rhwp, HEIC/AVIF 엔진과 기본 대체 글꼴을 앱에 포함합니다. Python·Homebrew를 따로 설치할 필요가 없습니다. Windows의 Office 전용 출력처럼 외부 문서 프로그램에 의존하는 작업은 [지원 조건](docs/user/MACOS.md#변환과-지원-조건)을 확인하세요. 유료 Apple 서명·공증은 포함하지 않습니다.
 
 ## CLI로 시작하기
 
@@ -45,20 +47,13 @@ PowerShell에서 설치 폴더를 열고 `magic_converter-cli.exe`를 실행합�
 .\magic_converter-cli.exe convert --to png "C:\Files\sample.jpg" --output "C:\Files\out"
 ```
 
-MCP 클라이언트에는 같은 폴더의 `magic_converter-mcp.exe`를 stdio 서버로 등록합니다. <br>
-폴더 감시와 로컬 요청은 CLI의 `watch`, `serve`, `send` 명령을 사용합니다.
+MCP 클라이언트에는 같은 폴더의 `magic_converter-mcp.exe`를 stdio 서버로 등록합니다. 폴더 감시와 로컬 요청은 CLI의 `watch`, `serve`, `send` 명령을 사용합니다.
 
 ## 지원 확장자와 변환 가능 목록
 
-현재 소스에 등록된 **82종·95개 확장자 표기**입니다. <br>
-입력 확장자 94개와 출력 전용 `.html`을 포함합니다. <br>
-대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다. <br>
-설치본의 지원 목록은 해당 버전 태그의 README에서 확인할 수 있습니다.
+현재 소스에 등록된 **82종·95개 확장자 표기**입니다. 입력 확장자 94개와 출력 전용 `.html`을 포함합니다. 대소문자를 구분하지 않으며, 출력은 표의 기본 확장자로 저장합니다. 설치본의 지원 목록은 해당 버전 태그의 README에서 확인할 수 있습니다.
 
-**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상이고, **CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. <br>
-필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. <br>
-여러 파일을 함께 놓으면 공통 대상만 표시됩니다. <br>
-실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
+**변환 휠 출력**은 파일 하나를 Shift 휠에 놓았을 때 선택할 수 있는 대상이고, **CLI 추가 출력**은 CLI에서 추가로 선택할 수 있는 대상입니다. 필요한 엔진을 사용할 수 있는 경우의 등록 경로이며, 문서·PDF를 거치는 연결 변환도 포함합니다. 여러 파일을 함께 놓으면 공통 대상만 표시됩니다. 실제 파일의 내용과 출력 형식의 제약은 아래 조건을 따릅니다.
 
 | 분류 | 입력 확장자 | 변환 휠 출력 | CLI 추가 출력 | 조건·특징 |
 | --- | --- | --- | --- | --- |

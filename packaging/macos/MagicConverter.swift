@@ -307,8 +307,9 @@ private final class App: NSObject, NSApplicationDelegate {
             popup.addItem(withTitle: "자동")
             popup.lastItem?.representedObject = ""
             for group in profile.profiles where group["mode"] as? String == mode {
-                popup.addItem(withTitle: group["name"] as? String ?? "휠")
-                popup.lastItem?.representedObject = group["id"] as? String ?? ""
+                let item = NSMenuItem(title: group["name"] as? String ?? "휠", action: nil, keyEquivalent: "")
+                item.representedObject = group["id"] as? String ?? ""
+                popup.menu!.addItem(item)
             }
             let selected = profile.values[key] as? String ?? ""
             popup.selectItem(at: popup.itemArray.firstIndex(where: { $0.representedObject as? String == selected }) ?? 0)
