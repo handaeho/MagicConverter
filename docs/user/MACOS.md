@@ -5,7 +5,7 @@ macOS 15 이상에서 실행됩니다. **이 Mac에 관하여**에서 칩이 App
 [Apple Silicon 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/MagicConverter-3.0.5-macOS-arm64.zip) · [Intel 다운로드](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.1/MagicConverter-3.0.5-macOS-x86_64.zip)
 
 1. ZIP을 풀고 `MagicConverter.app`을 **응용 프로그램**으로 옮깁니다.
-2. Finder에서 파일을 창에 끌어 넣거나 **파일 선택…**을 누릅니다.
+2. Finder에서 파일을 창에 끌어 넣거나 **파일 선택**을 누릅니다.
 3. 표시되는 변환 작업과 저장 위치를 선택하고 **변환 시작**을 누릅니다. **Finder에서 결과 보기**로 출력 파일을 찾을 수 있습니다.
 
 앱에는 Rust 변환 엔진, PDFium, rhwp가 포함됩니다. 이미지·자막·압축·구조화 자료 변환, PDF → 편집 가능한 PPTX, DOCX → HWPX 등 선택한 파일에서 실행 가능한 작업이 목록에 나타납니다.
