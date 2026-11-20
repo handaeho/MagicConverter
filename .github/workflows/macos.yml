@@ -67,7 +67,7 @@ jobs:
           mkdir "$RUNNER_TEMP/drag-test"
           "$py" -c 'from PIL import Image; import sys; Image.new("RGB", (40, 30), (52, 91, 140)).save(sys.argv[1])' "$RUNNER_TEMP/drag-test/drag.png"
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$RUNNER_TEMP/drag-test/drag_converted.jpg" "$bin/magic_converter-cli"
-          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" control "$RUNNER_TEMP/drag-test/drag_stripped.png" "$bin/magic_converter-cli"
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" control "$RUNNER_TEMP/drag-test/drag_converted.png" "$bin/magic_converter-cli"
           printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' \
             "$(uname -m)" > "$RUNNER_TEMP/release/verification-${{ matrix.arch }}.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

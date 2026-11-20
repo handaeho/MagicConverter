@@ -134,6 +134,7 @@ DispatchQueue.global().async {
         }
     }
     print("FAILED: wheel appeared but no output was created at \(resultPath.path).")
+    print((try? FileManager.default.contentsOfDirectory(atPath: file.deletingLastPathComponent().path)) ?? [])
     exit(1)
 }
 app.run()
