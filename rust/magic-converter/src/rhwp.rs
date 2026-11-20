@@ -76,6 +76,18 @@ fn sections(path: &Path) -> io::Result<u64> {
 }
 
 fn font_directories() -> Vec<PathBuf> {
+    if cfg!(target_os = "macos") {
+        return [
+            Some(PathBuf::from("/System/Library/Fonts")),
+            Some(PathBuf::from("/System/Library/Fonts/Supplemental")),
+            Some(PathBuf::from("/Library/Fonts")),
+            std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Fonts")),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|path| path.is_dir())
+        .collect();
+    }
     let system = std::env::var_os("WINDIR").unwrap_or_else(|| "C:/Windows".into());
     std::iter::once(PathBuf::from(system).join("Fonts"))
         .chain(
@@ -197,9 +209,17 @@ fn invoke_prepared(
         arguments.extend(
             [
                 "--fallback-sans",
-                "Malgun Gothic",
+                if cfg!(target_os = "macos") {
+                    "Apple SD Gothic Neo"
+                } else {
+                    "Malgun Gothic"
+                },
                 "--fallback-serif",
-                "Batang",
+                if cfg!(target_os = "macos") {
+                    "AppleMyungjo"
+                } else {
+                    "Batang"
+                },
             ]
             .into_iter()
             .map(OsString::from),

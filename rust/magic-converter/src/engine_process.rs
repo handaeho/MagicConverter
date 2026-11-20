@@ -395,10 +395,68 @@ mod native {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(crate) use native::Process;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+mod native {
+    use super::*;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Child, Command, Stdio};
+    use std::sync::Mutex;
+
+    pub struct Process {
+        child: Mutex<Child>,
+        group: i32,
+    }
+
+    impl Process {
+        pub fn start(
+            executable: &Path,
+            arguments: &[OsString],
+            stdout: &File,
+            stderr: &File,
+        ) -> io::Result<Self> {
+            let child = Command::new(executable)
+                .args(arguments)
+                .stdin(Stdio::null())
+                .stdout(stdout.try_clone()?)
+                .stderr(stderr.try_clone()?)
+                .process_group(0)
+                .spawn()?;
+            let group = child.id() as i32;
+            Ok(Self {
+                child: Mutex::new(child),
+                group,
+            })
+        }
+
+        pub fn wait(&self, interval: Duration) -> io::Result<Option<u32>> {
+            let deadline = Instant::now() + interval;
+            loop {
+                if let Some(status) = self.child.lock().unwrap().try_wait()? {
+                    return Ok(Some(status.code().map_or(1, |code| code as u32)));
+                }
+                if Instant::now() >= deadline {
+                    return Ok(None);
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    impl Drop for Process {
+        fn drop(&mut self) {
+            // Each encoder owns a new process group, including any subprocesses.
+            unsafe {
+                libc::kill(-self.group, libc::SIGKILL);
+            }
+            let _ = self.child.lock().unwrap().wait();
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 mod native {
     use super::*;
     pub struct Process;

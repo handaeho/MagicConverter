@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 
 private struct Conversion: Decodable {
     let key: String
@@ -68,6 +69,8 @@ private final class App: NSObject, NSApplicationDelegate {
     private let convertProfile = NSPopUpButton(frame: .zero, pullsDown: false)
     private let quickProfile = NSPopUpButton(frame: .zero, pullsDown: false)
     private var service: Process?
+    private var conversionProcess: Process?
+    private var progressTimer: Timer?
     private var statusItem: NSStatusItem!
     private let wheelEnabled = NSButton(checkboxWithTitle: "드래그 감지 사용", target: nil, action: nil)
     private let releaseModifier = NSButton(checkboxWithTitle: "휠 안에서 보조키를 놓아야 실행", target: nil, action: nil)
@@ -134,6 +137,10 @@ private final class App: NSObject, NSApplicationDelegate {
             return try JSONSerialization.jsonObject(with: Self.invoke(self.cli, arguments)) as? [String: Any] ?? [:]
         }
         settings.restartService = { [weak self] in self?.reloadService() }
+        settings.cancelConversion = { [weak self] in
+            if let process = self?.conversionProcess, process.isRunning { kill(process.processIdentifier, SIGINT) }
+        }
+        settings.currentConversion = { [weak self] in self?.busy == true ? self?.detail.stringValue ?? "변환 중" : "" }
         wheel.onQuery = { [weak self] files, mode, completion in
             self?.available(files) { [weak self] actions in
                 completion(self?.profile.slots(for: mode, available: actions) ?? [])
@@ -340,7 +347,7 @@ private final class App: NSObject, NSApplicationDelegate {
             let data = try? Self.invoke(cli, ["available", "--"] + files.map(Self.argument))
             let choices = data.flatMap { try? JSONDecoder().decode(Choices.self, from: $0) }
             var actions = choices?.actions.map { WheelAction(key: $0.key, label: $0.label) } ?? []
-            if files.allSatisfy({ FileManager.default.fileExists(atPath: $0.path) }) {
+            if files.allSatisfy({ $0.isFileURL && FileManager.default.fileExists(atPath: $0.path) }) {
                 actions += [WheelAction(key: "copy_path", label: "경로 복사"), WheelAction(key: "terminal", label: "터미널 열기")]
             }
             let result = actions
@@ -468,9 +475,28 @@ private final class App: NSObject, NSApplicationDelegate {
         notify("\(action.label) · \(files.count)개 파일 변환 중…")
         progress.startAnimation(nil)
         let request = arguments
+        let progressFile = profile.directory.appendingPathComponent("progress-\(UUID().uuidString).json")
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            guard let self, let data = try? Data(contentsOf: progressFile),
+                  let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let finished = value["finished"] as? Int, let total = value["total"] as? Int else { return }
+            let file = value["file"] as? String ?? ""
+            let message = "\(action.label) · \(finished)/\(total)개 완료\n\(file)"
+            self.detail.stringValue = message
+            self.notificationText.stringValue = message
+        }
         work.async {
-            let response = Result { try JSONDecoder().decode(ResultReport.self, from: Self.invoke(cli, request)) }
+            let response = Result {
+                try JSONDecoder().decode(ResultReport.self, from: Self.invoke(cli, request,
+                    environment: ["MAGIC_CONVERTER_PROGRESS": progressFile.path], started: { process in
+                        DispatchQueue.main.async { self.conversionProcess = process }
+                    }))
+            }
             DispatchQueue.main.async {
+                self.progressTimer?.invalidate()
+                self.progressTimer = nil
+                self.conversionProcess = nil
+                try? FileManager.default.removeItem(at: progressFile)
                 self.progress.stopAnimation(nil)
                 self.busy = false
                 self.run.isEnabled = true
@@ -503,14 +529,16 @@ private final class App: NSObject, NSApplicationDelegate {
 
     private static func argument(_ url: URL) -> String { url.isFileURL ? url.path : url.absoluteString }
 
-    private static func invoke(_ cli: URL, _ arguments: [String]) throws -> Data {
+    private static func invoke(_ cli: URL, _ arguments: [String], environment: [String: String] = [:], started: ((Process) -> Void)? = nil) throws -> Data {
         let process = Process()
         process.executableURL = cli
         process.arguments = arguments
+        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         try process.run()
+        started?(process)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return data

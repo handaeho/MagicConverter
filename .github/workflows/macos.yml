@@ -26,6 +26,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            rust/magic-converter/target
+          key: macos-${{ matrix.arch }}-${{ hashFiles('rust/magic-converter/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: macos-${{ matrix.arch }}-${{ hashFiles('rust/magic-converter/Cargo.lock') }}-
       - name: Build macOS package
         shell: bash
         run: |
@@ -75,3 +82,10 @@ jobs:
             ${{ runner.temp }}/release/*.pkg
             ${{ runner.temp }}/release/*.sha256
             ${{ runner.temp }}/release/verification-*.txt
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/registry
+            rust/magic-converter/target
+          key: macos-${{ matrix.arch }}-${{ hashFiles('rust/magic-converter/Cargo.lock') }}-${{ github.sha }}

@@ -1431,6 +1431,7 @@ dependencies = [
  "glob",
  "html-escape",
  "image",
+ "libc",
  "libloading",
  "lopdf",
  "lzma-rust2",

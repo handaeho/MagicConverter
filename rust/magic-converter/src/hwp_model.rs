@@ -6,9 +6,9 @@ use std::fmt::Write as _;
 use std::io::{self, Cursor, ErrorKind};
 use std::path::Path;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod compound;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod legacy;
 mod read;
 mod write;
@@ -246,7 +246,7 @@ fn office_html(
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(crate) fn office_pdf(
     source: &Path,
     target: &Path,
@@ -309,7 +309,7 @@ pub(crate) fn to_hwpx(
     warnings: &mut Vec<String>,
 ) -> io::Result<bool> {
     let result = crate::rhwp::invoke(source, target, "hwp", "hwpx", check, warnings);
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     if let Err(error) = result {
         check()?;
         let html = legacy::read(source, check)

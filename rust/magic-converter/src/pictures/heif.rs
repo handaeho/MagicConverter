@@ -173,6 +173,9 @@ fn library_path() -> io::Result<PathBuf> {
         return Ok(path);
     }
     if cfg!(target_os = "macos") {
+        if let Ok(path) = runtime_library(name) {
+            return Ok(path);
+        }
         for library in [
             "/opt/homebrew/lib/libheif.dylib",
             "/usr/local/lib/libheif.dylib",

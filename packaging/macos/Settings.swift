@@ -24,7 +24,7 @@ final class MacProfile {
         }
     }
 
-    var presets: [[String: Any]] { values["presets"] as? [[String: Any]] ?? [] }
+    var presets: [[String: Any]] { (values["presets"] as? [[String: Any]] ?? []).filter { $0["id"] is String && $0["action_key"] is String } }
     var profiles: [[String: Any]] { values["profiles"] as? [[String: Any]] ?? [] }
     var actions: [[String: Any]] { catalog["actions"] as! [[String: Any]] }
 
@@ -67,6 +67,8 @@ final class SettingsWindow: NSObject {
     private var jobs: [[String: Any]] = []
     var command: (([String]) throws -> [String: Any])?
     var restartService: (() -> Void)?
+    var cancelConversion: (() -> Void)?
+    var currentConversion: (() -> String)?
 
     init(profile: MacProfile) {
         self.profile = profile
@@ -182,7 +184,7 @@ final class SettingsWindow: NSObject {
             row("감지 주기 (ms)", numbers("interval_ms", Array(30...50), profile.values["interval_ms"] as? Int ?? 35)),
             row("드래그 거리 (px)", numbers("threshold", Array(stride(from: 5, through: 80, by: 5)), profile.values["threshold"] as? Int ?? 15)),
             row("출력 이름", choice("template", [("원본 이름 + 변환 종류", "{stem}_{tag}"), ("원본 이름", "{stem}"), ("원본 이름 + 프리셋", "{stem}_{preset}")], output["template"] as? String ?? "{stem}_{tag}")),
-            row("이름 충돌", choice("collision", [("번호를 붙여 저장", "rename"), ("기존 파일 건너뛰기", "skip"), ("덮어쓰기", "overwrite")], output["collision"] as? String ?? "rename")),
+            row("이름 충돌", choice("collision", [("번호를 붙여 저장", "rename"), ("오류 안내 후 중지", "error")], output["collision"] as? String ?? "rename")),
             row("결과 기록 보관 수", numbers("history_limit", [0, 50, 100, 200, 500, 1000], profile.values["history_limit"] as? Int ?? 200)),
             row("FFmpeg 경로", button("실행 파일 선택…", #selector(selectFFmpeg))),
             row("설정 파일", NSStackView(views: [button("가져오기…", #selector(importSettings)), button("내보내기…", #selector(exportSettings))])),
@@ -263,6 +265,7 @@ final class SettingsWindow: NSObject {
             }
         }
         rows.append(row("실행 작업", NSStackView(views: [button("새로고침", #selector(render)), button("전체 취소", #selector(cancelJobs))])))
+        if let text = currentConversion?(), !text.isEmpty { rows.append(row("앱 변환", NSTextField(wrappingLabelWithString: text))) }
         return rows
     }
 
@@ -272,8 +275,9 @@ final class SettingsWindow: NSObject {
         let entries = data?["entries"] as? [[String: Any]] ?? []
         if entries.isEmpty { return [row("결과 기록", NSTextField(labelWithString: "아직 변환 기록이 없습니다."))] }
         return entries.reversed().prefix(200).map { entry in
-            let sources = entry["sources"] as? [String] ?? []
-            return row(entry["action"] as? String ?? entry["name"] as? String ?? "변환", NSTextField(wrappingLabelWithString: sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")))
+            let files = entry["files"] as? [[String: Any]] ?? []
+            let sources = files.compactMap { $0["source"] as? String }
+            return row(entry["label"] as? String ?? "변환", NSTextField(wrappingLabelWithString: sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")))
         }
     }
 
@@ -394,6 +398,7 @@ final class SettingsWindow: NSObject {
         saveRules(rules); render()
     }
     @objc private func cancelJobs() {
+        cancelConversion?()
         do {
             let result = try command?(["status"])
             if let instance = result?["instance"] as? String { _ = try command?(["cancel", "--instance", instance]) }

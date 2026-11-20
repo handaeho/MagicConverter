@@ -1,0 +1,36 @@
+name: macOS native runtime verification
+on:
+  push:
+    branches: ['codex/macos-parity']
+    paths: ['packaging/macos/runtime.sh', 'tools/build/bundle_macos_runtime.py', '.github/workflows/macos-native.yml', 'rust/magic-converter/native/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Build relocatable native dependencies
+        shell: bash
+        run: |
+          app="$RUNNER_TEMP/Native.app"
+          work="$RUNNER_TEMP/native-build"
+          mkdir -p "$app/Contents/Resources/Notices" "$work"
+          bash packaging/macos/runtime.sh "$app" "$work"
+          "$app/Contents/vendor/ffmpeg/ffmpeg" -version
+          printf '<html><p>Offline document PDF test</p></html>' > "$work/test.html"
+          "$app/Contents/vendor/qt/magic_qt_render" html-pdf "$work/test.html" "$work/test.pdf" portrait
+          test -s "$work/test.pdf"
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/native-runtime-$(uname -m).zip"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-${{ matrix.runner }}
+          path: ${{ runner.temp }}/native-runtime-*.zip

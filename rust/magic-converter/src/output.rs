@@ -370,7 +370,20 @@ pub(crate) fn move_folder(source: &Path, destination: &Path) -> io::Result<()> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub(crate) fn move_folder(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::ffi::CString;
+    let source = CString::new(source.as_os_str().as_encoded_bytes())?;
+    let destination = CString::new(destination.as_os_str().as_encoded_bytes())?;
+    // RENAME_EXCL atomically refuses any destination created by another job.
+    if unsafe { libc::renamex_np(source.as_ptr(), destination.as_ptr(), libc::RENAME_EXCL) } == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 pub(crate) fn move_folder(_: &Path, _: &Path) -> io::Result<()> {
     Err(io::Error::new(
         ErrorKind::Unsupported,

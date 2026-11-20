@@ -682,6 +682,24 @@ pub(crate) fn convert_with(
     let recipe = planned.recipe.clone();
     let started = stamp();
     let clock = std::time::Instant::now();
+    #[cfg(target_os = "macos")]
+    let result = {
+        let progress = std::env::var_os("MAGIC_CONVERTER_PROGRESS").map(PathBuf::from);
+        let paths = planned.paths.clone();
+        let mut finished = 0;
+        crate::execute(catalog, planned, cancelled, 1, |index, state| {
+            if !matches!(state, "queued" | "running") {
+                finished += 1;
+            }
+            if let Some(path) = &progress {
+                let _ = write_report(
+                    path,
+                    &json!({"file": paths[index].file_name().unwrap_or_default().to_string_lossy(), "finished": finished, "total": paths.len()}),
+                );
+            }
+        })
+    };
+    #[cfg(not(target_os = "macos"))]
     let result = crate::execute(catalog, planned, cancelled, 1, |_, _| {});
     let profile = crate::preferences(catalog, &input.common)?;
     let directory = directory(&input.common)?;

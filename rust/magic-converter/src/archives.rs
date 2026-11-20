@@ -749,7 +749,19 @@ fn free_space(path: &Path) -> io::Result<u64> {
     Ok(available)
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+fn free_space(path: &Path) -> io::Result<u64> {
+    use std::ffi::CString;
+    let path = CString::new(path.as_os_str().as_encoded_bytes())?;
+    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    if unsafe { libc::statvfs(path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let stats = unsafe { stats.assume_init() };
+    Ok((stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64))
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn free_space(_: &Path) -> io::Result<u64> {
     Err(io::Error::new(
         ErrorKind::Unsupported,

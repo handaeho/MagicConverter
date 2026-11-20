@@ -19,6 +19,9 @@ mod mesh;
 mod mupdf;
 #[cfg(windows)]
 mod native_office;
+#[cfg(target_os = "macos")]
+#[path = "native_office_macos.rs"]
+mod native_office;
 mod office_package;
 mod output;
 mod pdf;
@@ -405,11 +408,11 @@ fn supported(edge: &Edge) -> bool {
 }
 
 fn native_office_edge(edge: &Edge) -> bool {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         native_office::supports(edge)
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         let _ = edge;
         false
@@ -771,7 +774,7 @@ impl FileConversion<'_> {
                         workbook_pdf::convert(path, target, check, file_warnings)
                     })
             }
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             _ if native_office_edge(edge) => {
                 selection
                     .output
@@ -1241,11 +1244,23 @@ fn run(command: Command, catalog: &Catalog) -> Result<u8, Box<dyn std::error::Er
                 .into_iter()
                 .collect::<Vec<_>>();
             let qt = qt_render::engine().is_some();
+            let paths = input
+                .paths
+                .iter()
+                .map(|path| {
+                    if let Some(url) = path.to_str().filter(|value| web::Input::is_argument(value))
+                    {
+                        web::Input::url(url, None, false).map(|input| input.placeholder())
+                    } else {
+                        Ok(path.clone())
+                    }
+                })
+                .collect::<io::Result<Vec<_>>>()?;
             let actions: Vec<_> = catalog
                 .actions
                 .iter()
                 .filter(|action| {
-                    input.paths.iter().all(|path| {
+                    paths.iter().all(|path| {
                         catalog
                             .assess(path, &action.key, &disabled)
                             .route
