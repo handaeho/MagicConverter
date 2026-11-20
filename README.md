@@ -32,7 +32,7 @@ PDF → PPTX의 **편집 복원**은 흐름도 라벨을 원래 위치에 유지
 
 macOS 15 이상을 지원합니다. Mac의 칩에 맞는 **PKG 설치 마법사**를 실행하거나 ZIP의 `MagicConverter.app`을 **응용 프로그램**으로 옮기세요. Apple M 계열은 Apple Silicon용입니다.
 
-[Apple Silicon 설치 PKG](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.2/MagicConverter-3.0.5-macOS-arm64.pkg) · [Intel 설치 PKG](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.2/MagicConverter-3.0.5-macOS-x86_64.pkg) · [ZIP 및 설치 안내](docs/user/MACOS.md)
+[Apple Silicon 설치 PKG](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.2/MagicConverter-3.0.5-macOS-arm64.pkg) · [Intel 설치 PKG](https://github.com/handaeho/MagicConverter/releases/download/v3.0.5-macos.2/MagicConverter-3.0.5-macOS-x86_64.pkg) · [ZIP 및 설치 안내](docs/user/MACOS.md) · [Mac 수정 사항](docs/release/3.0.5-macos.2.md)
 
 Finder에서 파일을 먼저 끌고 **Shift**를 누르면 변환 휠이, **Control**을 누르면 빠른 작업 휠이 나타납니다. 원하는 항목 위에 파일을 놓으세요. macOS의 Control+클릭은 보조 클릭이므로 드래그를 시작한 뒤 Control을 누릅니다. 브라우저의 이미지 드래그, 프리셋·휠 편집, 폴더 감시, 결과 기록, 오른쪽 아래 진행창과 메뉴 막대 아이콘을 제공합니다.
 
