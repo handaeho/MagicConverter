@@ -58,6 +58,15 @@ jobs:
           cp tools/validation/verify_macos_settings.swift "$RUNNER_TEMP/main.swift"
           xcrun swiftc "$RUNNER_TEMP/main.swift" packaging/macos/Settings.swift packaging/macos/Wheel.swift -o "$testapp/Contents/MacOS/MagicConverter"
           MAGIC_CONVERTER_PROFILE_DIR="$RUNNER_TEMP/settings-profile" "$testapp/Contents/MacOS/MagicConverter" "$RUNNER_TEMP/settings-test" "$app/Contents/MacOS/magic_converter-cli" "$RUNNER_TEMP/drag-test/drag.png"
+          osascript -e 'tell application id "com.handaeho.magicconverter" to quit'
+          sleep 2
+          sudo installer -pkg "$RUNNER_TEMP/release/MagicConverter-3.0.5-macOS-${{ matrix.arch }}.pkg" -target /
+          installed="/Applications/MagicConverter.app"
+          codesign --verify --deep --strict "$installed"
+          /usr/bin/open -n -a "$installed"
+          "$RUNNER_TEMP/check-window" "$installed" --keep-running
+          xcrun swiftc tools/validation/verify_macos_uninstall.swift -o "$RUNNER_TEMP/check-uninstall"
+          "$RUNNER_TEMP/check-uninstall" "$installed"
       - name: Capture interaction diagnostics
         if: always()
         shell: bash
