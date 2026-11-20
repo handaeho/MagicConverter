@@ -8,6 +8,7 @@ private struct Conversion: Decodable {
 
 private struct Choices: Decodable {
     let actions: [Conversion]
+    let snapshot_recipes: Bool?
 }
 
 private struct ResultReport: Decodable {
@@ -17,6 +18,7 @@ private struct ResultReport: Decodable {
         let warnings: [String]
     }
     let ok: Bool
+    let interrupted: Bool?
     let jobs: [Job]?
     let errors: [String]?
     let error: String?
@@ -24,10 +26,11 @@ private struct ResultReport: Decodable {
 
 private final class DropView: NSView {
     var onFiles: (([URL]) -> Void)?
+    var onError: ((Error) -> Void)?
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL, .URL])
+        registerForDraggedTypes(dragTypes)
     }
 
     required init?(coder: NSCoder) { return nil }
@@ -44,7 +47,12 @@ private final class DropView: NSView {
         guard let onFiles else { return false }
         let urls = files(sender)
         guard !urls.isEmpty else { return false }
-        onFiles(urls)
+        receiveDrag(sender.draggingPasteboard) { [weak self] result in
+            switch result {
+            case .success(let files): self?.onFiles?(files)
+            case .failure(let error): self?.onError?(error)
+            }
+        }
         return true
     }
 }
@@ -71,6 +79,16 @@ private final class App: NSObject, NSApplicationDelegate {
     private var service: Process?
     private var conversionProcess: Process?
     private var progressTimer: Timer?
+    private var shuttingDown = false
+    private struct PendingConversion {
+        let action: WheelAction
+        let files: [URL]
+        let recipe: [String: Any]
+        let output: URL?
+    }
+    private var pending: [PendingConversion] = []
+    private var snapshotRecipes = false
+    private let queries = DispatchQueue(label: "com.handaeho.magicconverter.actions", qos: .userInitiated)
     private var statusItem: NSStatusItem!
     private let wheelEnabled = NSButton(checkboxWithTitle: "드래그 감지 사용", target: nil, action: nil)
     private let releaseModifier = NSButton(checkboxWithTitle: "휠 안에서 보조키를 놓아야 실행", target: nil, action: nil)
@@ -138,15 +156,20 @@ private final class App: NSObject, NSApplicationDelegate {
         }
         settings.restartService = { [weak self] in self?.reloadService() }
         settings.cancelConversion = { [weak self] in
+            self?.pending.removeAll()
             if let process = self?.conversionProcess, process.isRunning { kill(process.processIdentifier, SIGINT) }
         }
-        settings.currentConversion = { [weak self] in self?.busy == true ? self?.detail.stringValue ?? "변환 중" : "" }
+        settings.currentConversion = { [weak self] in
+            guard let self, self.busy else { return "" }
+            return self.detail.stringValue + " · 대기 \(self.pending.count)건"
+        }
         wheel.onQuery = { [weak self] files, mode, completion in
             self?.available(files) { [weak self] actions in
                 completion(self?.profile.slots(for: mode, available: actions) ?? [])
             }
         }
         wheel.onChoose = { [weak self] action, files in self?.execute(action, files: files) }
+        wheel.view.onError = { [weak self] error in self?.notify(error.localizedDescription) }
         wheel.start()
 
         window.title = "MagicConverter 3.0.5"
@@ -155,6 +178,7 @@ private final class App: NSObject, NSApplicationDelegate {
         window.contentView = dropView
         window.center()
         dropView.onFiles = { [weak self] in self?.setFiles($0) }
+        dropView.onError = { [weak self] error in self?.notify(error.localizedDescription) }
 
         let title = NSTextField(labelWithString: "MagicConverter 3.0.5")
         title.font = .systemFont(ofSize: 18, weight: .semibold)
@@ -231,8 +255,21 @@ private final class App: NSObject, NSApplicationDelegate {
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if busy { notify("변환 작업이 진행 중입니다. 완료 후 종료할 수 있습니다."); return .terminateCancel }
-        service?.terminate()
-        return .terminateNow
+        guard service?.isRunning == true else { return .terminateNow }
+        if !shuttingDown {
+            shuttingDown = true
+            let cli = cli
+            work.async {
+                if let data = try? Self.invoke(cli, ["status"]),
+                   let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let instance = result["instance"] as? String {
+                    _ = try? Self.invoke(cli, ["stop", "--instance", instance])
+                    self.service?.waitUntilExit()
+                }
+                DispatchQueue.main.async { NSApp.reply(toApplicationShouldTerminate: true) }
+            }
+        }
+        return .terminateLater
     }
 
     @objc private func showWindow() {
@@ -341,9 +378,8 @@ private final class App: NSObject, NSApplicationDelegate {
     }
 
     private func available(_ files: [URL], completion: @escaping ([WheelAction]) -> Void) {
-        guard !busy else { completion([]); return }
         let cli = cli
-        work.async {
+        queries.async {
             let data = try? Self.invoke(cli, ["available", "--"] + files.map(Self.argument))
             let choices = data.flatMap { try? JSONDecoder().decode(Choices.self, from: $0) }
             var actions = choices?.actions.map { WheelAction(key: $0.key, label: $0.label) } ?? []
@@ -351,7 +387,8 @@ private final class App: NSObject, NSApplicationDelegate {
                 actions += [WheelAction(key: "copy_path", label: "경로 복사"), WheelAction(key: "terminal", label: "터미널 열기")]
             }
             let result = actions
-            DispatchQueue.main.async { completion(result) }
+            let snapshots = choices?.snapshot_recipes == true
+            DispatchQueue.main.async { self.snapshotRecipes = snapshots; completion(result) }
         }
     }
 
@@ -366,7 +403,6 @@ private final class App: NSObject, NSApplicationDelegate {
     }
 
     @objc private func chooseFiles() {
-        guard !busy else { return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
@@ -384,6 +420,7 @@ private final class App: NSObject, NSApplicationDelegate {
             if answer == .OK {
                 self?.output = panel.url
                 self?.destination.stringValue = panel.url?.path ?? "원본 파일과 같은 폴더"
+                self?.saveOutput()
             }
         }
     }
@@ -392,12 +429,20 @@ private final class App: NSObject, NSApplicationDelegate {
         guard !busy else { return }
         output = nil
         destination.stringValue = "원본 파일과 같은 폴더"
+        saveOutput()
+    }
+
+    private func saveOutput() {
+        var rule = profile.values["output"] as? [String: Any] ?? [:]
+        rule["location"] = output == nil ? "source" : "folder"
+        rule["directory"] = output?.path ?? ""
+        profile.values["output"] = rule
+        do { try profile.save() } catch { detail.stringValue = error.localizedDescription }
     }
 
     @objc private func clearFiles() { setFiles([]) }
 
     private func setFiles(_ urls: [URL]) {
-        guard !busy else { return }
         var seen = Set<URL>()
         files = urls.filter { ($0.isFileURL || ["https", "http"].contains($0.scheme ?? "")) && seen.insert($0).inserted }
         let files = files
@@ -415,14 +460,16 @@ private final class App: NSObject, NSApplicationDelegate {
         detail.stringValue = ""
         guard !files.isEmpty else { return }
         let cli = cli
-        work.async {
+        queries.async {
             let result = Result { try Self.invoke(cli, ["available", "--"] + files.map(Self.argument)) }
             DispatchQueue.main.async {
                 guard self.query == token else { return }
                 self.actions.removeAllItems()
                 do {
                     let data = try result.get()
-                    self.options = try JSONDecoder().decode(Choices.self, from: data).actions
+                    let choices = try JSONDecoder().decode(Choices.self, from: data)
+                    self.snapshotRecipes = choices.snapshot_recipes == true
+                    self.options = choices.actions
                     for action in self.options { self.actions.addItem(withTitle: action.label) }
                 } catch {
                     self.detail.stringValue = "변환 작업을 확인하지 못했습니다. \(error.localizedDescription)"
@@ -435,13 +482,13 @@ private final class App: NSObject, NSApplicationDelegate {
     }
 
     @objc private func convert() {
-        guard !busy, options.indices.contains(actions.indexOfSelectedItem) else { return }
+        guard options.indices.contains(actions.indexOfSelectedItem) else { return }
         let action = options[actions.indexOfSelectedItem]
         execute(WheelAction(key: action.key, label: action.label), files: files)
     }
 
     private func execute(_ action: WheelAction, files: [URL]) {
-        guard !busy, !files.isEmpty else { return }
+        guard !files.isEmpty else { return }
         if action.key == "copy_path" {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(files.map(\.path).joined(separator: "\n"), forType: .string)
@@ -462,11 +509,41 @@ private final class App: NSObject, NSApplicationDelegate {
             }
             return
         }
+        var recipe = profile.presets.first { $0["id"] as? String == action.presetID } ?? [
+            "id": "cli", "name": action.label, "action_key": action.key
+        ]
+        if recipe["output"] == nil || recipe["output"] is NSNull { recipe["output"] = profile.values["output"] }
+        let job = PendingConversion(action: action, files: files, recipe: recipe, output: output)
+        if busy {
+            guard pending.count < 100 else { notify("대기 작업이 100건을 초과했습니다."); return }
+            pending.append(job)
+            notify("\(action.label) · 대기 작업 \(pending.count)건")
+            return
+        }
+        begin(job)
+    }
+
+    private func begin(_ job: PendingConversion) {
+        let action = job.action
+        let files = job.files
         let cli = cli
-        var arguments = ["convert"]
-        if let preset = action.presetID { arguments += ["--preset", preset] }
-        else { arguments += ["--action", action.key] }
-        if let output { arguments += ["--output", output.path] }
+        let requestFile = profile.directory.appendingPathComponent("request-\(UUID().uuidString).json")
+        var arguments = ["convert", "--action", action.key]
+        if snapshotRecipes {
+            do {
+                try JSONSerialization.data(withJSONObject: job.recipe).write(to: requestFile, options: .atomic)
+                arguments += ["--recipe-file", requestFile.path]
+            } catch { notify(error.localizedDescription); return }
+        } else if let preset = action.presetID {
+            arguments = ["convert", "--preset", preset]
+        }
+        if let output = job.output { arguments += ["--output", output.path] }
+        else if files.allSatisfy({ $0.path.hasPrefix(dragInbox().path + "/") }) {
+            let downloads = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads/MagicConverter")
+            do { try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true) }
+            catch { notify(error.localizedDescription); return }
+            arguments += ["--output", downloads.path]
+        }
         arguments += ["--"] + files.map(Self.argument)
         busy = true
         run.isEnabled = false
@@ -497,6 +574,7 @@ private final class App: NSObject, NSApplicationDelegate {
                 self.progressTimer = nil
                 self.conversionProcess = nil
                 try? FileManager.default.removeItem(at: progressFile)
+                try? FileManager.default.removeItem(at: requestFile)
                 self.progress.stopAnimation(nil)
                 self.busy = false
                 self.run.isEnabled = true
@@ -506,7 +584,7 @@ private final class App: NSObject, NSApplicationDelegate {
                     self.results = jobs.flatMap(\.outputs).map { URL(fileURLWithPath: $0) }
                     let notices = ([report.error].compactMap { $0 } + (report.errors ?? [])
                                    + jobs.flatMap(\.errors) + jobs.flatMap(\.warnings))
-                    self.detail.stringValue = ([report.ok ? "변환 완료 · 결과 \(self.results.count)개" : "변환 실패"]
+                    self.detail.stringValue = ([report.interrupted == true ? "변환을 취소했습니다." : (report.ok ? "변환 완료 · 결과 \(self.results.count)개" : "변환 실패")]
                                                + Array(notices.prefix(2))).joined(separator: "\n")
                     self.reveal.isEnabled = !self.results.isEmpty
                     self.notify(self.detail.stringValue)
@@ -514,6 +592,7 @@ private final class App: NSObject, NSApplicationDelegate {
                     self.detail.stringValue = "변환 결과를 읽지 못했습니다. \(error.localizedDescription)"
                     self.notify(self.detail.stringValue)
                 }
+                if !self.pending.isEmpty { self.begin(self.pending.removeFirst()) }
             }
         }
     }

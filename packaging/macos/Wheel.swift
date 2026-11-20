@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 struct WheelAction: Equatable {
     let key: String
@@ -22,13 +23,89 @@ enum WheelMode: String {
     }
 }
 
-func draggedFiles(_ board: NSPasteboard) -> [URL] {
+private func directFiles(_ board: NSPasteboard) -> [URL] {
     let urls = (board.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] ?? [])
         .filter { $0.isFileURL || ["https", "http"].contains($0.scheme?.lowercased() ?? "") }
     if !urls.isEmpty { return urls }
     let paths = board.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String] ?? []
     return paths.map { URL(fileURLWithPath: $0) }
 }
+
+private func promises(_ board: NSPasteboard) -> [NSFilePromiseReceiver] {
+    board.readObjects(forClasses: [NSFilePromiseReceiver.self], options: nil) as? [NSFilePromiseReceiver] ?? []
+}
+
+func dragInbox() -> URL {
+    let profile = ProcessInfo.processInfo.environment["MAGIC_CONVERTER_PROFILE_DIR"].map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/MagicConverter/3.0/profile")
+    return profile.appendingPathComponent("DragInbox")
+}
+
+func draggedFiles(_ board: NSPasteboard) -> [URL] {
+    let direct = directFiles(board)
+    if !direct.isEmpty { return direct }
+    let types = promises(board).flatMap(\.fileTypes)
+    if !types.isEmpty {
+        return types.enumerated().map { index, type in
+            let suffix = UTType(type)?.preferredFilenameExtension ?? "bin"
+            return dragInbox().appendingPathComponent("pending-\(index).\(suffix)")
+        }
+    }
+    let suffix = board.types?.contains(.png) == true ? "png" : (board.types?.contains(.tiff) == true ? "tiff" : nil)
+    return suffix.map { [dragInbox().appendingPathComponent("pending.\($0)")] } ?? []
+}
+
+func receiveDrag(_ board: NSPasteboard, completion: @escaping (Result<[URL], Error>) -> Void) {
+    let direct = directFiles(board)
+    if !direct.isEmpty { completion(.success(direct)); return }
+    let folder = dragInbox().appendingPathComponent(UUID().uuidString)
+    do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
+    catch { completion(.failure(error)); return }
+    let receivers = promises(board)
+    if !receivers.isEmpty {
+        let count = receivers.reduce(0) { $0 + $1.fileTypes.count }
+        guard (1...256).contains(count) else {
+            completion(.failure(NSError(domain: "MagicConverter", code: 1, userInfo: [NSLocalizedDescriptionKey: "드래그 파일 수를 확인하세요."])))
+            return
+        }
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        var files: [URL] = []
+        var errors: [Error] = []
+        var received = 0
+        for receiver in receivers {
+            receiver.receivePromisedFiles(atDestination: folder, options: [:], operationQueue: queue) { file, error in
+                received += 1
+                if let error { errors.append(error) }
+                else {
+                    let path = file.standardizedFileURL
+                    let valid = path.path.hasPrefix(folder.standardizedFileURL.path + "/")
+                        && ((try? path.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]))
+                            .map { $0.isRegularFile == true && $0.isSymbolicLink != true && ($0.fileSize ?? 0) <= 32 * 1024 * 1024 } ?? false)
+                    if valid { files.append(path) }
+                    else { errors.append(NSError(domain: "MagicConverter", code: 1, userInfo: [NSLocalizedDescriptionKey: "드래그 파일의 크기와 경로를 확인하세요."])) }
+                }
+                if received == count {
+                    let result: Result<[URL], Error> = errors.first.map { .failure($0) } ?? .success(files)
+                    DispatchQueue.main.async { completion(result) }
+                }
+            }
+        }
+        return
+    }
+    do {
+        let type: NSPasteboard.PasteboardType = board.types?.contains(.png) == true ? .png : .tiff
+        guard let data = board.data(forType: type), !data.isEmpty, data.count <= 32 * 1024 * 1024 else {
+            throw NSError(domain: "MagicConverter", code: 1, userInfo: [NSLocalizedDescriptionKey: "드래그 이미지 데이터는 32 MiB까지 지원합니다."])
+        }
+        let file = folder.appendingPathComponent(type == .png ? "image.png" : "image.tiff")
+        try data.write(to: file, options: .atomic)
+        completion(.success([file]))
+    } catch { completion(.failure(error)) }
+}
+
+let dragTypes: [NSPasteboard.PasteboardType] = [.fileURL, .URL, .png, .tiff, NSPasteboard.PasteboardType("NSFilenamesPboardType")]
+    + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
 
 final class WheelView: NSView {
     var actions: [WheelAction] = [] { didSet { needsDisplay = true } }
@@ -39,12 +116,13 @@ final class WheelView: NSView {
     var onFiles: (([URL]) -> Void)?
     var onChoose: ((WheelAction, [URL]) -> Void)?
     var onFinish: (() -> Void)?
+    var onError: ((Error) -> Void)?
     var selected: Int? { didSet { needsDisplay = true } }
     private var received: [URL] = []
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL, .URL, NSPasteboard.PasteboardType("NSFilenamesPboardType")])
+        registerForDraggedTypes(dragTypes)
         setAccessibilityIdentifier("magicconverter-wheel")
         setAccessibilityLabel("변환 작업 휠")
     }
@@ -138,9 +216,13 @@ final class WheelView: NSView {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         guard !update(sender).isEmpty, let selected, actions.indices.contains(selected) else { return false }
         let action = actions[selected]
-        let files = received
         onFinish?()
-        onChoose?(action, files)
+        receiveDrag(sender.draggingPasteboard) { [weak self] result in
+            switch result {
+            case .success(let files): self?.onChoose?(action, files)
+            case .failure(let error): self?.onError?(error)
+            }
+        }
         return true
     }
 
@@ -226,7 +308,7 @@ final class DragWheel {
         guard let current, let origin, hypot(point.x - origin.x, point.y - origin.y) >= threshold else { return }
         if !panel.isVisible {
             let board = NSPasteboard(name: .drag)
-            guard board.types?.contains(where: { $0 == .fileURL || $0 == .URL || $0.rawValue == "NSFilenamesPboardType" }) == true else { return }
+            guard board.types?.contains(where: { dragTypes.contains($0) }) == true else { return }
             mode = current
             source = []
             view.actions = []

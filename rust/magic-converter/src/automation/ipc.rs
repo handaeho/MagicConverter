@@ -188,6 +188,11 @@ impl<'a> Service<'a> {
                 return Ok(json!({"cancelled": self.active.cancel(id)}));
             }
             "settings" => {
+                #[cfg(target_os = "macos")]
+                if self.desktop.is_none() {
+                    crate::macos_shell::open(&[])?;
+                    return Ok(json!({}));
+                }
                 let desktop = self.desktop.ok_or("이 인스턴스에는 설정 창이 없습니다.")?;
                 desktop.events.send(DesktopEvent::Settings)?;
                 return Ok(json!({}));
@@ -209,6 +214,11 @@ impl<'a> Service<'a> {
             .collect::<std::result::Result<_, _>>()?;
         match command {
             "open" => {
+                #[cfg(target_os = "macos")]
+                if self.desktop.is_none() {
+                    crate::macos_shell::open(&paths)?;
+                    return Ok(json!({"files": paths.len()}));
+                }
                 let desktop = self
                     .desktop
                     .ok_or("이 인스턴스에는 변환 선택 창이 없습니다.")?;

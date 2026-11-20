@@ -3,12 +3,12 @@ set -euo pipefail
 bundle="$1/Contents"
 work="$2"
 export HOMEBREW_NO_AUTO_UPDATE=1
-brew install qtbase qtsvg ffmpeg libheif libavif pkgconf
+brew install qtbase qtsvg ffmpeg-full libheif libavif pkgconf
 qt="$(brew --prefix qtbase)"
 svg="$(brew --prefix qtsvg)"
 avif="$(brew --prefix libavif)"
 heif="$(brew --prefix libheif)"
-ffmpeg="$(brew --prefix ffmpeg)"
+ffmpeg="$(brew --prefix ffmpeg-full)"
 python3 -m venv "$work/build-python"
 py="$work/build-python/bin/python"
 "$py" -m pip install --disable-pip-version-check 'pymupdf==1.28.2'

@@ -12,6 +12,8 @@ mod hwp_model;
 mod hwpx_graphics;
 mod hwpx_layout;
 mod hwpx_text;
+#[cfg(target_os = "macos")]
+mod macos_shell;
 mod mail;
 mod mcp;
 mod media;
@@ -95,6 +97,8 @@ enum Command {
     Stop(automation::ipc::Stop),
     #[cfg(windows)]
     Shell(desktop::shell::Shell),
+    #[cfg(target_os = "macos")]
+    Shell(macos_shell::Shell),
     #[command(hide = true)]
     ComparePlans,
     #[command(hide = true)]
@@ -127,6 +131,9 @@ enum Command {
 
 #[derive(Args, Clone, Default)]
 struct Common {
+    #[cfg(target_os = "macos")]
+    #[arg(long, hide = true)]
+    recipe_file: Option<PathBuf>,
     #[arg(long)]
     data_dir: Option<PathBuf>,
     #[arg(long)]
@@ -262,6 +269,8 @@ fn selected_recipe(
 ) -> Result<Value, String> {
     let mut recipe = if let Some(recipe) = &input.recipe {
         recipe.clone()
+    } else if let Some(recipe) = gui_recipe(&input.common)? {
+        recipe
     } else if let Some(selector) = &input.preset {
         let selected: Vec<_> = profile["presets"]
             .as_array()
@@ -299,6 +308,17 @@ fn selected_recipe(
         recipe["output"]["directory"] = json!(folder);
     }
     automation::normalize_recipe(catalog, recipe)
+}
+
+fn gui_recipe(common: &Common) -> Result<Option<Value>, String> {
+    #[cfg(target_os = "macos")]
+    if let Some(path) = &common.recipe_file {
+        return automation::read_json(path, 2 * 1024 * 1024)
+            .map(Some)
+            .map_err(|error| error.to_string());
+    }
+    let _ = common;
+    Ok(None)
 }
 
 fn selection_for<'a>(catalog: &'a Catalog, recipe: &Value) -> Result<Selection<'a>, String> {
@@ -1277,7 +1297,11 @@ fn run(command: Command, catalog: &Catalog) -> Result<u8, Box<dyn std::error::Er
                     })
                 })
                 .collect();
-            (json!({"ok": true, "actions": actions}), 0, input.common)
+            (
+                json!({"ok": true, "actions": actions, "snapshot_recipes": true}),
+                0,
+                input.common,
+            )
         }
         Command::Presets(common) => {
             let profile = preferences(catalog, &common)?;
@@ -1334,6 +1358,10 @@ fn run(command: Command, catalog: &Catalog) -> Result<u8, Box<dyn std::error::Er
             desktop::shell::run(&input).map_err(Into::into),
             input.common,
         ),
+        #[cfg(target_os = "macos")]
+        Command::Shell(input) => {
+            ipc_result(macos_shell::run(&input).map_err(Into::into), input.common)
+        }
     };
     if let Some(path) = &common.report
         && let Err(error) = write_report(path, &report)
