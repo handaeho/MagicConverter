@@ -125,18 +125,41 @@ def main():
         results = list(pool.map(execute, cases))
     failures = [result for result in results if not result["ok"]]
     regressions = failures
+    quality_differences = []
+    identical_outputs = 0
     if args.reference:
         reference = json.loads(args.reference.read_text(encoding="utf8"))
         expected = {(case["source"], case["action"]): case for case in reference["cases"]}
         regressions = [case for case in results if expected[(case["source"], case["action"])]["ok"] and not case["ok"]]
         if set(expected) != {(case["source"], case["action"]) for case in results}:
             raise AssertionError("The reference and candidate did not execute the same conversions")
+        for case in results:
+            baseline = expected[(case["source"], case["action"])]
+            if not (case["ok"] and baseline["ok"]):
+                continue
+            differences = []
+            if len(case["outputs"]) != len(baseline["outputs"]):
+                differences.append("output count")
+            for left, right in zip(baseline["outputs"], case["outputs"]):
+                for key in ("kind", "pages", "members", "width", "height", "frames"):
+                    if left.get(key) != right.get(key):
+                        differences.append(key)
+                if "".join(left.get("text", [])) != "".join(right.get("text", [])):
+                    differences.append("searchable PDF text")
+                if left.get("kind") == "directory" and set(left["files"]) != set(right["files"]):
+                    differences.append("directory members")
+            if differences:
+                quality_differences.append({"source": case["source"], "action": case["action"],
+                                            "differences": sorted(set(differences))})
+            if all(left.get("sha256") == right.get("sha256") for left, right in zip(baseline["outputs"], case["outputs"])):
+                identical_outputs += 1
     report = {"queries": len(contract), "routes": len(cases) + len(missing), "native": len(cases),
               "missing": missing, "executed": len(results), "passed": len(results) - len(failures),
-              "failures": failures, "regressions": regressions, "cases": results}
+              "failures": failures, "regressions": regressions,
+              "quality_differences": quality_differences, "identical_outputs": identical_outputs, "cases": results}
     (root / "verification.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf8")
     print(json.dumps({key: value for key, value in report.items() if key != "cases"}, ensure_ascii=False, indent=2))
-    raise SystemExit(bool(regressions or missing))
+    raise SystemExit(bool(regressions or missing or quality_differences))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,9 @@
 import AppKit
 
+private final class SettingsDocument: NSView {
+    override var isFlipped: Bool { true }
+}
+
 private final class NumberField: NSStackView {
     let text: NSTextField
     private let stepper = NSStepper()
@@ -87,6 +91,7 @@ final class SettingsWindow: NSObject {
     private var ruleIndex = 0
     private var jobs: [[String: Any]] = []
     private var historyOutputs: [String: [URL]] = [:]
+    private var historyDetails: [String: String] = [:]
     var command: (([String]) throws -> [String: Any])?
     var restartService: (() -> Void)?
     var cancelConversion: (() -> Void)?
@@ -194,7 +199,7 @@ final class SettingsWindow: NSObject {
         grid.column(at: 0).xPlacement = .leading
         grid.column(at: 1).xPlacement = .fill
         grid.translatesAutoresizingMaskIntoConstraints = false
-        let document = NSView()
+        let document = SettingsDocument()
         document.addSubview(grid)
         content.documentView = document
         document.translatesAutoresizingMaskIntoConstraints = false
@@ -228,6 +233,7 @@ final class SettingsWindow: NSObject {
         let preset = presets.indices.contains(presetIndex) ? presets[presetIndex] : [:]
         let options = preset["options"] as? [String: Any] ?? [:]
         let tools = preset["tools"] as? [String: Any] ?? [:]
+        let output = preset["output"] as? [String: Any] ?? [:]
         let selector = choice("preset", presets.enumerated().map { ($0.element["name"] as? String ?? "", String($0.offset)) }, String(presetIndex))
         selector.target = self
         selector.action = #selector(selectPreset)
@@ -250,6 +256,13 @@ final class SettingsWindow: NSObject {
             ("start_ms", "구간 시작 (ms)", 0, 604800000), ("duration_ms", "구간 길이 (ms)", 0, 604800000),
             ("frame_interval", "프레임 추출 간격", 1, 10000), ("max_frames", "최대 추출 프레임", 10000, 100000)
         ] { rows.append(row(title, number(key, tools[key] as? Int ?? fallback, minimum: ["frame_interval", "max_frames"].contains(key) ? 1 : 0, maximum: maximum))) }
+        rows += [
+            row("프리셋 저장 위치", choice("preset-location", [("기본 출력 설정 사용", ""), ("원본 파일 폴더", "source"), ("지정 폴더", "folder")], output["location"] as? String ?? "")),
+            row("프리셋 출력 폴더", text("preset-directory", output["directory"] as? String ?? "")),
+            row("", button("프리셋 출력 폴더 선택…", #selector(selectPresetFolder))),
+            row("프리셋 출력 이름", choice("preset-template", [("원본 이름 + 변환 종류", "{stem}_{tag}"), ("원본 이름", "{stem}"), ("원본 이름 + 프리셋", "{stem}_{preset}")], output["template"] as? String ?? "{stem}_{tag}")),
+            row("프리셋 이름 충돌", choice("preset-collision", [("번호를 붙여 저장", "rename"), ("오류 안내 후 중지", "error")], output["collision"] as? String ?? "rename"))
+        ]
         rows.append(row("", NSStackView(views: [button("저장", #selector(savePreset)), button("새 프리셋", #selector(addPreset)), button("삭제", #selector(deletePreset))])))
         return rows
     }
@@ -311,20 +324,41 @@ final class SettingsWindow: NSObject {
         let entries = data?["entries"] as? [[String: Any]] ?? []
         if entries.isEmpty { return [row("결과 기록", NSTextField(labelWithString: "아직 변환 기록이 없습니다."))] }
         historyOutputs = [:]
+        historyDetails = [:]
         return entries.reversed().prefix(200).map { entry in
             let files = entry["files"] as? [[String: Any]] ?? []
             let sources = files.compactMap { $0["source"] as? String }
             let id = entry["id"] as? String ?? UUID().uuidString
             historyOutputs[id] = files.flatMap { $0["outputs"] as? [String] ?? [] }.map { URL(fileURLWithPath: $0) }
+            historyDetails[id] = files.map { file in
+                ([file["source"] as? String ?? "", "상태 · \(file["state"] as? String ?? "")"]
+                 + (file["errors"] as? [String] ?? []) + (file["warnings"] as? [String] ?? [])
+                 + (file["outputs"] as? [String] ?? [])).joined(separator: "\n")
+            }.joined(separator: "\n\n")
             let reveal = button("결과 위치", #selector(revealHistory))
             reveal.identifier = NSUserInterfaceItemIdentifier(id)
             reveal.isEnabled = !(historyOutputs[id] ?? []).isEmpty
-            return row(entry["label"] as? String ?? "변환", NSStackView(views: [NSTextField(wrappingLabelWithString: sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")), reveal]))
+            let details = button("자세히", #selector(showHistoryDetails))
+            details.identifier = NSUserInterfaceItemIdentifier(id)
+            return row(entry["label"] as? String ?? "변환", NSStackView(views: [NSTextField(wrappingLabelWithString: sources.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ")), reveal, details]))
         }
     }
 
     @objc private func revealHistory(_ sender: NSButton) {
         NSWorkspace.shared.activateFileViewerSelecting(historyOutputs[sender.identifier?.rawValue ?? ""] ?? [])
+    }
+
+    @objc private func showHistoryDetails(_ sender: NSButton) {
+        let alert = NSAlert()
+        alert.messageText = "변환 결과"
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 500, height: 300))
+        scroll.hasVerticalScroller = true
+        let text = NSTextView(frame: scroll.bounds)
+        text.isEditable = false
+        text.string = historyDetails[sender.identifier?.rawValue ?? ""] ?? ""
+        scroll.documentView = text
+        alert.accessoryView = scroll
+        alert.runModal()
     }
 
     private func persist() {
@@ -350,6 +384,18 @@ final class SettingsWindow: NSObject {
         var options = preset["options"] as? [String: Any] ?? [:]
         for (field, key) in [("quality", "image_quality"), ("edge", "image_max_edge"), ("crf", "video_crf"), ("bitrate", "audio_bitrate")] { options[key] = Int(value(field)) }
         preset["options"] = options
+        let location = value("preset-location")
+        if location.isEmpty { preset["output"] = NSNull() }
+        else {
+            let directory = value("preset-directory")
+            var isDirectory: ObjCBool = false
+            if location == "folder" && (!FileManager.default.fileExists(atPath: directory, isDirectory: &isDirectory) || !isDirectory.boolValue) {
+                status.stringValue = "프리셋 출력 폴더를 선택하세요."
+                return
+            }
+            preset["output"] = ["location": location, "directory": directory,
+                                 "template": value("preset-template"), "collision": value("preset-collision")]
+        }
         var tools = preset["tools"] as? [String: Any] ?? [:]
         tools["pdf_pages"] = value("pages")
         tools["rotation"] = Int(value("rotation"))
@@ -478,6 +524,7 @@ final class SettingsWindow: NSObject {
     }
     @objc private func chooseWatchFolder() { selectFolder("watch-folder") }
     @objc private func chooseWatchOutput() { selectFolder("watch-output") }
+    @objc private func selectPresetFolder() { selectFolder("preset-directory") }
     @objc private func selectFFmpeg() {
         let panel = NSOpenPanel()
         if panel.runModal() == .OK { profile.values["ffmpeg_path"] = panel.url!.path; persist() }

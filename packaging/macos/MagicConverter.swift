@@ -287,6 +287,14 @@ private final class App: NSObject, NSApplicationDelegate {
     }
 
     private func applyProfile() {
+        let rule = profile.values["output"] as? [String: Any] ?? [:]
+        if rule["location"] as? String == "folder", let directory = rule["directory"] as? String, !directory.isEmpty {
+            output = URL(fileURLWithPath: directory)
+            destination.stringValue = directory
+        } else {
+            output = nil
+            destination.stringValue = "원본 파일과 같은 폴더"
+        }
         wheelEnabled.state = profile.values["enabled"] as? Bool == false ? .off : .on
         releaseModifier.state = profile.values["release_modifier_inside"] as? Bool == true ? .on : .off
         wheel.enabled = wheelEnabled.state == .on
@@ -366,13 +374,33 @@ private final class App: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: "제거")
         alert.addButton(withTitle: "취소")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        NSWorkspace.shared.recycle([Bundle.main.bundleURL]) { _, error in
+        let cli = cli
+        work.async {
+            if self.service?.isRunning == true {
+                guard let data = try? Self.invoke(cli, ["status"]),
+                      let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let instance = result["instance"] as? String else {
+                    DispatchQueue.main.async { self.notify("자동화 서비스 상태를 확인한 뒤 제거할 수 있습니다.") }
+                    return
+                }
+                if let jobs = result["jobs"] as? [Any], !jobs.isEmpty {
+                    DispatchQueue.main.async { self.notify("감시 변환이 실행 중입니다. 작업 완료 또는 취소 후 제거하세요.") }
+                    return
+                }
+                _ = try? Self.invoke(cli, ["stop", "--instance", instance])
+                self.service?.waitUntilExit()
+            }
             DispatchQueue.main.async {
-                if let error {
-                    let failure = NSAlert(error: error)
-                    failure.messageText = "앱을 휴지통으로 옮기지 못했습니다."
-                    failure.runModal()
-                } else { NSApp.terminate(nil) }
+                NSWorkspace.shared.recycle([Bundle.main.bundleURL]) { _, error in
+                    DispatchQueue.main.async {
+                        if let error {
+                            let failure = NSAlert(error: error)
+                            failure.messageText = "앱을 휴지통으로 옮기지 못했습니다."
+                            failure.runModal()
+                            self.startService()
+                        } else { NSApp.terminate(nil) }
+                    }
+                }
             }
         }
     }
@@ -538,7 +566,8 @@ private final class App: NSObject, NSApplicationDelegate {
             arguments = ["convert", "--preset", preset]
         }
         if let output = job.output { arguments += ["--output", output.path] }
-        else if files.allSatisfy({ $0.path.hasPrefix(dragInbox().path + "/") }) {
+        else if files.allSatisfy({ $0.path.hasPrefix(dragInbox().path + "/") })
+                    && (job.recipe["output"] as? [String: Any])?["location"] as? String != "folder" {
             let downloads = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads/MagicConverter")
             do { try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true) }
             catch { notify(error.localizedDescription); return }

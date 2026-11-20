@@ -78,6 +78,7 @@ jobs:
           "$py" -c 'from PIL import Image; import sys; Image.new("RGB", (40, 30), (52, 91, 140)).save(sys.argv[1])' "$RUNNER_TEMP/drag-test/drag.png"
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$RUNNER_TEMP/drag-test/drag_converted.jpg" "$bin/magic_converter-cli"
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" control "$RUNNER_TEMP/drag-test/drag_converted.png" "$bin/magic_converter-cli"
+          "$py" tools/validation/verify_macos_automation.py --worker "$bin/magic_converter-cli" --image "$RUNNER_TEMP/drag-test/drag.png" --output "$RUNNER_TEMP/automation-test"
           "$py" tools/validation/verify_macos_conversions.py --worker "$bin/magic_converter-cli" --output "$RUNNER_TEMP/conversions" --reference tests/fixtures/macos/windows-execution.json
           cp "$RUNNER_TEMP/conversions/verification.json" "$RUNNER_TEMP/release/conversions-${{ matrix.arch }}.json"
           printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' \

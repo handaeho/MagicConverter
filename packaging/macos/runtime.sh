@@ -9,12 +9,19 @@ svg="$(brew --prefix qtsvg)"
 avif="$(brew --prefix libavif)"
 heif="$(brew --prefix libheif)"
 ffmpeg="$(brew --prefix ffmpeg-full)"
+encoders="$("$ffmpeg/bin/ffmpeg" -hide_banner -encoders)"
+for encoder in libvorbis libx264 libx265 libvpx-vp9 libopus libmp3lame aac; do
+  grep -w "$encoder" <<< "$encoders" >/dev/null
+done
 python3 -m venv "$work/build-python"
 py="$work/build-python/bin/python"
 "$py" -m pip install --disable-pip-version-check 'pymupdf==1.28.2'
 mupdf="$("$py" -c 'import pymupdf; print(pymupdf.__path__[0])')"
 export PKG_CONFIG_PATH="$qt/lib/pkgconfig:$svg/lib/pkgconfig:$avif/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 mkdir -p "$bundle/vendor/qt/plugins/platforms" "$bundle/vendor/heif" "$bundle/vendor/mupdf" "$bundle/vendor/ffmpeg"
+mkdir -p "$bundle/vendor/qt/fonts" "$bundle/Resources/Notices/Fonts"
+cp packaging/macos/fonts/*.otf packaging/macos/fonts/*.ttf "$bundle/vendor/qt/fonts/"
+cp packaging/macos/fonts/LICENSE-*.txt "$bundle/Resources/Notices/Fonts/"
 clang++ -std=c++20 -O2 rust/magic-converter/native/qt_render.cpp \
   $(pkg-config --cflags --libs Qt6Gui Qt6Svg) -o "$bundle/vendor/qt/magic_qt_render"
 cp "$qt/share/qt/plugins/platforms/libqoffscreen.dylib" "$bundle/vendor/qt/plugins/platforms/" || \

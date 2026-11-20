@@ -9,7 +9,7 @@ while Date() < deadline {
     let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
         as? [[String: Any]] ?? []
     let applications = NSRunningApplication.runningApplications(withBundleIdentifier: applicationID)
-    for application in applications where application.isFinishedLaunching {
+    for application in applications where application.isFinishedLaunching && application.bundleURL?.standardizedFileURL == appURL.standardizedFileURL {
         let mainWindowVisible = windows.contains { window in
             guard (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == application.processIdentifier,
                   (window[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,

@@ -241,6 +241,7 @@ final class DragWheel {
     var onChoose: ((WheelAction, [URL]) -> Void)?
     var onQuery: (([URL], WheelMode, @escaping ([WheelAction]) -> Void) -> Void)?
     private var timer: Timer?
+    private var mouseDownMonitor: Any?
     private var origin: NSPoint?
     private var mode: WheelMode?
     private var source: [URL] = []
@@ -264,9 +265,21 @@ final class DragWheel {
     }
 
     func start() {
+        if mouseDownMonitor == nil {
+            mouseDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                if let point = event.cgEvent?.location, let top = NSScreen.screens.first?.frame.maxY {
+                    self?.origin = NSPoint(x: point.x, y: top - point.y)
+                } else { self?.origin = NSEvent.mouseLocation }
+            }
+        }
         timer?.invalidate()
         timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in self?.poll() }
         RunLoop.main.add(timer!, forMode: .common)
+    }
+
+    deinit {
+        timer?.invalidate()
+        if let mouseDownMonitor { NSEvent.removeMonitor(mouseDownMonitor) }
     }
 
     func finish() {

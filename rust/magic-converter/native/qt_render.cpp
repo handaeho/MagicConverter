@@ -1,6 +1,8 @@
 #include <cmath>
 #include <QDir>
 #include <QFile>
+#include <QFont>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QImage>
 #include <QAbstractTextDocumentLayout>
@@ -39,7 +41,11 @@ static int html_pdf(const QStringList& args) {
     if (args[4] == "landscape") output.setPageOrientation(QPageLayout::Landscape);
     output.setPageMargins(QMarginsF(12, 12, 12, 12), QPageLayout::Millimeter);
     LocalDocument doc;
+#ifdef Q_OS_MAC
+    doc.setDefaultStyleSheet("body {font-family:'Noto Sans','Droid Sans Fallback'; font-size:10pt;} table {border-collapse:collapse;} td,th {border:1px solid #888;padding:4px;} p {margin:6px 0;}");
+#else
     doc.setDefaultStyleSheet("body {font-family:'Malgun Gothic'; font-size:10pt;} table {border-collapse:collapse;} td,th {border:1px solid #888;padding:4px;} p {margin:6px 0;}");
+#endif
     doc.setHtml(QString::fromUtf8(source.readAll()));
     doc.print(&output);
     return 0;
@@ -197,6 +203,16 @@ int main(int argc, char** argv) {
         if (QDir(fonts).exists()) qputenv("QT_QPA_FONTDIR", fonts.toLocal8Bit());
     }
     QGuiApplication app(argc, argv);
+#ifdef Q_OS_MAC
+    const QDir fonts(QCoreApplication::applicationDirPath() + "/fonts");
+    for (const QString& file : fonts.entryList({"*.otf", "*.ttf"}, QDir::Files)) {
+        if (QFontDatabase::addApplicationFont(fonts.filePath(file)) < 0) return 4;
+    }
+    for (const QString& family : {"Malgun Gothic", "Gulim", "Dotum", "Segoe UI"})
+        QFont::insertSubstitutions(family, {"Noto Sans", "Droid Sans Fallback"});
+    for (const auto script : {QChar::Script_Hangul, QChar::Script_Han, QChar::Script_Hiragana, QChar::Script_Katakana})
+        QFontDatabase::addApplicationFallbackFontFamily(script, "Droid Sans Fallback");
+#endif
     const QStringList args = QCoreApplication::arguments();
     if (args.size() < 4) return 2;
     if (args[1] == "html-pdf") return html_pdf(args);

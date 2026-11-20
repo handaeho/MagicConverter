@@ -132,7 +132,7 @@ DispatchQueue.global().async {
     key(code, down: true, flags: flags)
     post(.leftMouseDragged, cursor, flags: flags)
     var wheel: CGRect?
-    for _ in 0..<30 {
+    for _ in 0..<100 {
         Thread.sleep(forTimeInterval: 0.1)
         if let frame = wheelFrame() { wheel = frame; break }
     }
