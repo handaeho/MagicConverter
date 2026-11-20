@@ -117,7 +117,7 @@ private final class App: NSObject, NSApplicationDelegate {
         let fileItem = NSMenuItem()
         fileItem.title = "파일"
         let fileMenu = NSMenu(title: "파일")
-        let open = fileMenu.addItem(withTitle: "파일 선택…", action: #selector(chooseFiles), keyEquivalent: "o")
+        let open = fileMenu.addItem(withTitle: "변환할 파일 고르기…", action: #selector(chooseFiles), keyEquivalent: "o")
         open.target = self
         fileItem.submenu = fileMenu
         menu.addItem(fileItem)
@@ -205,7 +205,7 @@ private final class App: NSObject, NSApplicationDelegate {
             title, input,
             row([wheelEnabled, releaseModifier]),
             row([NSTextField(labelWithString: "Shift 변환 휠"), convertProfile, NSTextField(labelWithString: "Ctrl 작업 휠"), quickProfile]),
-            row([button("파일 선택…", #selector(chooseFiles)), clear]),
+            row([button("변환할 파일 고르기…", #selector(chooseFiles)), clear]),
             NSTextField(labelWithString: "변환 작업"), actions,
             NSTextField(labelWithString: "저장 위치"), destination,
             row([button("폴더 선택…", #selector(chooseFolder)), button("원본 폴더 사용", #selector(useSourceFolder))]),
@@ -478,6 +478,7 @@ private final class App: NSObject, NSApplicationDelegate {
         input.stringValue = files.isEmpty ? "Finder에서 파일을 이 창에 놓거나 파일을 선택하세요." :
             files.prefix(4).map(\.lastPathComponent).joined(separator: "\n") +
             (files.count > 4 ? "\n외 \(files.count - 4)개" : "")
+        input.toolTip = files.map(Self.argument).joined(separator: "\n")
         query = UUID()
         let token = query
         options = []
@@ -499,7 +500,9 @@ private final class App: NSObject, NSApplicationDelegate {
                     let choices = try JSONDecoder().decode(Choices.self, from: data)
                     self.snapshotRecipes = choices.snapshot_recipes == true
                     self.options = choices.actions
-                    for action in self.options { self.actions.addItem(withTitle: action.label) }
+                    for action in self.options {
+                        self.actions.menu!.addItem(NSMenuItem(title: action.label, action: nil, keyEquivalent: ""))
+                    }
                 } catch {
                     self.detail.stringValue = "변환 작업을 확인하지 못했습니다. \(error.localizedDescription)"
                 }
@@ -607,7 +610,7 @@ private final class App: NSObject, NSApplicationDelegate {
                 try? FileManager.default.removeItem(at: requestFile)
                 self.progress.stopAnimation(nil)
                 self.busy = false
-                self.run.isEnabled = true
+                self.run.isEnabled = !self.files.isEmpty && !self.options.isEmpty
                 do {
                     let report = try response.get()
                     let jobs = report.jobs ?? []
