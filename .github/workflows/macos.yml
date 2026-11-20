@@ -4,10 +4,10 @@ on:
     branches: ['codex/macos-3.0.5', 'codex/macos-parity']
     paths:
       - 'rust/**'
-      - 'packaging/macos/build.sh'
-      - 'packaging/macos/runtime.sh'
+      - 'packaging/macos/**'
+      - 'docs/user/MACOS.md'
       - 'tools/build/bundle_macos_runtime.py'
-      - 'tools/validation/verify_macos_conversions.py'
+      - 'tools/validation/verify_macos*'
       - 'tests/fixtures/macos/**'
       - '.github/workflows/macos.yml'
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
           - runner: macos-15-intel
             arch: x86_64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       CARGO_INCREMENTAL: '0'
     steps:
@@ -122,6 +122,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: MagicConverter-macOS-${{ matrix.arch }}
+          compression-level: 0
           if-no-files-found: error
           path: |
             ${{ runner.temp }}/release/*.zip

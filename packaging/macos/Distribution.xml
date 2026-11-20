@@ -9,4 +9,7 @@
   <choices-outline><line choice="default"/></choices-outline>
   <choice id="default" visible="false"><pkg-ref id="com.handaeho.magicconverter"/></choice>
   <pkg-ref id="com.handaeho.magicconverter" version="3.0.5.2">MagicConverter-component.pkg</pkg-ref>
+  <pkg-ref id="com.handaeho.magicconverter">
+    <must-close><app id="com.handaeho.magicconverter"/></must-close>
+  </pkg-ref>
 </installer-gui-script>

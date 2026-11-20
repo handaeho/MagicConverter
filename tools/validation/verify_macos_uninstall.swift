@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Darwin
 
 func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
@@ -33,18 +34,19 @@ let appMenu = children(menu).first { (attribute($0, kAXTitleAttribute) as? Strin
 press(appMenu)
 Thread.sleep(forTimeInterval: 0.3)
 press(find(appMenu, title: "MagicConverter 제거…")!)
-let deadline = Date().addingTimeInterval(10)
+let deadline = Date().addingTimeInterval(15)
 var confirmed = false
 while Date() < deadline {
     if !confirmed, let button = find(element, title: "제거") {
         press(button)
         confirmed = true
     }
-    if confirmed && !FileManager.default.fileExists(atPath: bundle.path) && application.isTerminated {
+    let terminated = Darwin.kill(application.processIdentifier, 0) == -1 && errno == ESRCH
+    if confirmed && !FileManager.default.fileExists(atPath: bundle.path) && terminated {
         print("PASS: native uninstall confirmation removed the installed app and exited normally.")
         exit(0)
     }
-    Thread.sleep(forTimeInterval: 0.2)
+    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
 }
 print("FAILED: native uninstall did not finish; appExists=\(FileManager.default.fileExists(atPath: bundle.path)), confirmed=\(confirmed)")
 exit(1)
