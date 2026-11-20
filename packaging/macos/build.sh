@@ -52,9 +52,9 @@ install -m 644 LICENSE "$bundle/Resources/Notices/LICENSE-MagicConverter"
 iconset="$work/AppIcon.iconset"
 mkdir "$iconset"
 for size in 16 32 128 256 512; do
-  sips --resampleHeightWidth "$size" "$size" assets/magic_converter-tool.png --out "$iconset/icon_\${size}x\${size}.png" >/dev/null
+  sips --resampleHeightWidth "$size" "$size" assets/magic_converter-tool.png --out "$iconset/icon_${size}x${size}.png" >/dev/null
   twice=$((size * 2))
-  sips --resampleHeightWidth "$twice" "$twice" assets/magic_converter-tool.png --out "$iconset/icon_\${size}x\${size}@2x.png" >/dev/null
+  sips --resampleHeightWidth "$twice" "$twice" assets/magic_converter-tool.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil --convert icns --output "$bundle/Resources/AppIcon.icns" "$iconset"
 
