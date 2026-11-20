@@ -25,7 +25,7 @@ precondition(AXIsProcessTrusted(), "Native UI test requires the CI runner's Acce
 let bundle = URL(fileURLWithPath: CommandLine.arguments[1]).standardizedFileURL
 let application = NSRunningApplication.runningApplications(withBundleIdentifier: "com.handaeho.magicconverter")
     .first { $0.bundleURL?.standardizedFileURL == bundle }!
-application.activate(ignoringOtherApps: true)
+application.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
 Thread.sleep(forTimeInterval: 1)
 let element = AXUIElementCreateApplication(application.processIdentifier)
 let menu = attribute(element, kAXMenuBarAttribute) as! AXUIElement
