@@ -56,6 +56,7 @@ private func key(_ code: CGKeyCode, down: Bool, flags: CGEventFlags) {
 let arguments = CommandLine.arguments
 let file = URL(fileURLWithPath: arguments[1])
 let quick = arguments[2] == "control"
+let finder = arguments.contains("--finder")
 let resultPath = URL(fileURLWithPath: arguments[3])
 let cli = Process()
 cli.executableURL = URL(fileURLWithPath: arguments[4])
@@ -83,13 +84,39 @@ let source = NSWindow(contentRect: NSRect(x: 35, y: 120, width: 260, height: 200
                       styleMask: [.titled], backing: .buffered, defer: false)
 source.title = "Native drag test source"
 source.contentView = SourceView(file: file)
-source.makeKeyAndOrderFront(nil)
-app.activate(ignoringOtherApps: true)
+if finder {
+    let automation = Process()
+    automation.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    automation.arguments = ["-e", """
+        on run argv
+            tell application "Finder"
+                activate
+                set sourceFolder to POSIX file (item 1 of argv) as alias
+                open sourceFolder
+                set w to front Finder window
+                set current view of w to icon view
+                set toolbar visible of w to false
+                set bounds of w to {40, 80, 400, 400}
+                set icon size of icon view options of w to 64
+                set arrangement of icon view options of w to not arranged
+                set sourceFile to item (item 2 of argv) of sourceFolder
+                set position of sourceFile to {100, 100}
+                set selection to {sourceFile}
+            end tell
+        end run
+        """, file.deletingLastPathComponent().path, file.lastPathComponent]
+    try automation.run()
+    automation.waitUntilExit()
+    precondition(automation.terminationStatus == 0, "Finder could not prepare the test file")
+} else {
+    source.makeKeyAndOrderFront(nil)
+    app.activate(ignoringOtherApps: true)
+}
 
 DispatchQueue.global().async {
     Thread.sleep(forTimeInterval: 1)
     let height = CGDisplayBounds(CGMainDisplayID()).height
-    let start = CGPoint(x: 165, y: height - 220)
+    let start = finder ? CGPoint(x: 140, y: 202) : CGPoint(x: 165, y: height - 220)
     let cursor = CGPoint(x: 510, y: height - 420)
     let flags: CGEventFlags = quick ? .maskControl : .maskShift
     let code: CGKeyCode = quick ? 59 : 56

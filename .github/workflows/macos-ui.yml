@@ -43,6 +43,10 @@ jobs:
           sips -z 40 40 assets/magic_converter-tool.png --out "$RUNNER_TEMP/drag-test/drag.png" >/dev/null
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$RUNNER_TEMP/drag-test/drag_converted.jpg" "$app/Contents/MacOS/magic_converter-cli"
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" control "$RUNNER_TEMP/drag-test/drag_converted.png" "$app/Contents/MacOS/magic_converter-cli"
+          mkdir "$RUNNER_TEMP/finder-test"
+          cp "$RUNNER_TEMP/drag-test/drag.png" "$RUNNER_TEMP/finder-test/drag.png"
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/finder-test/drag.png" shift "$RUNNER_TEMP/finder-test/drag_converted.jpg" "$app/Contents/MacOS/magic_converter-cli" --finder
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/finder-test/drag.png" control "$RUNNER_TEMP/finder-test/drag_converted.png" "$app/Contents/MacOS/magic_converter-cli" --finder
       - name: Capture interaction diagnostics
         if: always()
         shell: bash
