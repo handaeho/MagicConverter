@@ -249,6 +249,8 @@ final class DragWheel {
     private var reserved = false
     private var request = UUID()
     private var releaseDeadline: Date?
+    private var pasteboardChange = NSPasteboard(name: .drag).changeCount
+    private var freshDrag = false
 
     init() {
         panel.contentView = view
@@ -301,12 +303,18 @@ final class DragWheel {
                 if Date() >= releaseDeadline! { finish() }
             }
             origin = nil
+            pasteboardChange = NSPasteboard(name: .drag).changeCount
+            freshDrag = false
             if WheelMode.from(flags) == nil { reserved = false }
             consumed = false
             return
         }
         releaseDeadline = nil
         if origin == nil { origin = point }
+        if NSPasteboard(name: .drag).changeCount != pasteboardChange { freshDrag = true }
+        // A completed file drag leaves data on the shared drag pasteboard.
+        // Ordinary Shift text selection must not reuse that stale file data.
+        guard freshDrag else { return }
         guard enabled, !reserved, !consumed else {
             if panel.isVisible { finish() }
             return

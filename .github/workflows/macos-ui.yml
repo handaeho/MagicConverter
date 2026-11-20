@@ -50,6 +50,7 @@ jobs:
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$HOME/Downloads/MagicConverter" "$app/Contents/MacOS/magic_converter-cli" --web
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$HOME/Downloads/MagicConverter" "$app/Contents/MacOS/magic_converter-cli" --raw
           "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$HOME/Downloads/MagicConverter" "$app/Contents/MacOS/magic_converter-cli" --promise
+          "$RUNNER_TEMP/check-drag" "$RUNNER_TEMP/drag-test/drag.png" shift "$HOME/Downloads/MagicConverter" "$app/Contents/MacOS/magic_converter-cli" --plain
           testapp="$RUNNER_TEMP/SettingsTest.app"
           mkdir -p "$testapp/Contents/MacOS" "$testapp/Contents/Resources"
           cp "$app/Contents/Info.plist" "$testapp/Contents/Info.plist"

@@ -18,6 +18,7 @@ private final class SourceView: NSView, NSDraggingSource, NSFilePromiseProviderD
     }
     override func mouseDown(with event: NSEvent) { }
     override func mouseDragged(with event: NSEvent) {
+        if delivery == "plain" { return }
         let writer: NSPasteboardWriting
         if delivery == "promise" {
             writer = NSFilePromiseProvider(fileType: "public.png", delegate: self)
@@ -77,7 +78,7 @@ let file = URL(fileURLWithPath: arguments[1])
 let quick = arguments[2] == "control"
 let finder = arguments.contains("--finder")
 let browser = arguments.contains("--web")
-let delivery = arguments.contains("--promise") ? "promise" : (arguments.contains("--raw") ? "raw" : "file")
+let delivery = arguments.contains("--plain") ? "plain" : (arguments.contains("--promise") ? "promise" : (arguments.contains("--raw") ? "raw" : "file"))
 let transient = browser || delivery != "file"
 let resultPath = URL(fileURLWithPath: arguments[3])
 let existing = Set(((try? FileManager.default.contentsOfDirectory(atPath: resultPath.path)) ?? []))
@@ -161,6 +162,15 @@ DispatchQueue.global().async {
     }
     key(code, down: true, flags: flags)
     post(.leftMouseDragged, cursor, flags: flags)
+    if delivery == "plain" {
+        Thread.sleep(forTimeInterval: 2)
+        let displayed = wheelFrame() != nil
+        post(.leftMouseUp, cursor)
+        key(code, down: false, flags: [])
+        precondition(!displayed, "An ordinary modifier drag reused a previous file drag")
+        print("PASS: ordinary Shift text-selection gestures did not display the file wheel.")
+        exit(0)
+    }
     var wheel: CGRect?
     for _ in 0..<100 {
         Thread.sleep(forTimeInterval: 0.1)
