@@ -26,6 +26,8 @@ clang++ -std=c++20 -O2 rust/magic-converter/native/qt_render.cpp \
   $(pkg-config --cflags --libs Qt6Gui Qt6Svg) -o "$bundle/vendor/qt/magic_qt_render"
 cp "$qt/share/qt/plugins/platforms/libqoffscreen.dylib" "$bundle/vendor/qt/plugins/platforms/" || \
   cp "$qt/plugins/platforms/libqoffscreen.dylib" "$bundle/vendor/qt/plugins/platforms/"
+cp "$qt/share/qt/plugins/platforms/libqcocoa.dylib" "$bundle/vendor/qt/plugins/platforms/" || \
+  cp "$qt/plugins/platforms/libqcocoa.dylib" "$bundle/vendor/qt/plugins/platforms/"
 printf '[Paths]\nPlugins=plugins\n' > "$bundle/vendor/qt/qt.conf"
 clang -std=c11 -O2 -dynamiclib rust/magic-converter/native/avif_bridge.c \
   $(pkg-config --cflags --libs libavif) -o "$bundle/vendor/heif/libmagic_avif_bridge.dylib"
@@ -38,6 +40,7 @@ install -m 755 "$ffmpeg/bin/ffprobe" "$bundle/vendor/ffmpeg/ffprobe"
 "$py" tools/build/bundle_macos_runtime.py --app "$1" \
   --search "$qt/lib" --search "$svg/lib" --search "$mupdf" \
   "$bundle/vendor/qt/magic_qt_render" "$bundle/vendor/qt/plugins/platforms/libqoffscreen.dylib" \
+  "$bundle/vendor/qt/plugins/platforms/libqcocoa.dylib" \
   "$bundle/vendor/heif/libheif.dylib" "$bundle/vendor/heif/libmagic_avif_bridge.dylib" \
   "$bundle/vendor/mupdf/libmagic_mupdf_bridge.dylib" \
   "$bundle/vendor/ffmpeg/ffmpeg" "$bundle/vendor/ffmpeg/ffprobe"

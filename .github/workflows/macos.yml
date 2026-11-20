@@ -81,7 +81,19 @@ jobs:
           "$py" tools/validation/verify_macos_automation.py --worker "$bin/magic_converter-cli" --image "$RUNNER_TEMP/drag-test/drag.png" --output "$RUNNER_TEMP/automation-test"
           "$py" tools/validation/verify_macos_conversions.py --worker "$bin/magic_converter-cli" --output "$RUNNER_TEMP/conversions" --reference tests/fixtures/macos/windows-execution.json
           cp "$RUNNER_TEMP/conversions/verification.json" "$RUNNER_TEMP/release/conversions-${{ matrix.arch }}.json"
-          printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, and conversion selection passed.\n' \
+          # Exercise the actual Installer package and the app's native removal menu.
+          osascript -e 'tell application id "com.handaeho.magicconverter" to quit'
+          sleep 2
+          sudo installer -pkg "$RUNNER_TEMP/release/MagicConverter-3.0.5-macOS-${{ matrix.arch }}.pkg" -target /
+          installed="/Applications/MagicConverter.app"
+          codesign --verify --deep --strict "$installed"
+          /usr/bin/open -n -a "$installed"
+          "$RUNNER_TEMP/check-window" "$installed" --keep-running
+          xcrun swiftc tools/validation/verify_macos_uninstall.swift -o "$RUNNER_TEMP/check-uninstall"
+          printf 'retain user settings\n' > "$MAGIC_CONVERTER_PROFILE_DIR/retain-test.txt"
+          "$RUNNER_TEMP/check-uninstall" "$installed"
+          test -s "$MAGIC_CONVERTER_PROFILE_DIR/retain-test.txt"
+          printf 'Architecture: %s\nApp launch, PDF-to-PPTX, DOCX-to-HWPX, drag wheels, IPC, watch, conversion comparison, package installation and native uninstall passed.\n' \
             "$(uname -m)" > "$RUNNER_TEMP/release/verification-${{ matrix.arch }}.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

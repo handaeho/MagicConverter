@@ -197,7 +197,14 @@ static int svg_pdf(QSvgRenderer& renderer, const QStringList& args) {
 }
 
 int main(int argc, char** argv) {
+#ifdef Q_OS_MAC
+    // CoreText reports aliases for control characters when Qt reverses glyph
+    // indices for PDF ToUnicode. FreeType reads the font's Unicode cmap directly.
+    qputenv("QT_QPA_PLATFORM", "cocoa:fontengine=freetype");
+    qputenv("QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM", "1");
+#else
     qputenv("QT_QPA_PLATFORM", "offscreen");
+#endif
     if (!qEnvironmentVariableIsSet("QT_QPA_FONTDIR")) {
         const QString fonts = QDir(qEnvironmentVariable("WINDIR", "C:/Windows")).filePath("Fonts");
         if (QDir(fonts).exists()) qputenv("QT_QPA_FONTDIR", fonts.toLocal8Bit());

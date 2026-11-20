@@ -148,8 +148,10 @@ final class SettingsWindow: NSObject {
     private func choice(_ key: String, _ options: [(String, String)], _ value: String) -> NSPopUpButton {
         let field = NSPopUpButton(frame: .zero, pullsDown: false)
         for (label, value) in options {
-            field.addItem(withTitle: label)
-            field.lastItem?.representedObject = value
+            // NSPopUpButton.addItem(withTitle:) silently replaces equal titles.
+            let item = NSMenuItem(title: label, action: nil, keyEquivalent: "")
+            item.representedObject = value
+            field.menu!.addItem(item)
         }
         if !options.contains(where: { $0.1 == value }) {
             field.addItem(withTitle: value.isEmpty ? "기본값" : value)
@@ -158,6 +160,18 @@ final class SettingsWindow: NSObject {
         field.selectItem(at: field.itemArray.firstIndex(where: { $0.representedObject as? String == value }) ?? 0)
         fields[key] = field
         return field
+    }
+
+    private var actionChoices: [(String, String)] {
+        let categories = ["image": "이미지", "media": "동영상", "audio": "오디오", "document": "문서",
+                          "spreadsheet": "표", "hwp": "한글", "data": "자료", "font": "글꼴",
+                          "subtitle": "자막", "archive": "압축", "tool": "파일 도구", "office": "Office"]
+        return profile.actions.map { action in
+            let key = action["key"] as! String
+            let prefix = String(key.split(separator: ":").first ?? "")
+            let label = action["label"] as! String
+            return (categories[prefix].map { label + " · " + $0 } ?? label, key)
+        }
     }
 
     private func numbers(_ key: String, _ options: [Int], _ value: Int) -> NSPopUpButton {
@@ -240,7 +254,7 @@ final class SettingsWindow: NSObject {
         var rows = [
             row("프리셋", selector),
             row("이름", text("name", preset["name"] as? String ?? "")),
-            row("작업", choice("action", profile.actions.map { ($0["label"] as! String, $0["key"] as! String) }, preset["action_key"] as? String ?? "image:jpg")),
+            row("작업", choice("action", actionChoices, preset["action_key"] as? String ?? "image:jpg")),
             row("이미지 품질", numbers("quality", Array(stride(from: 10, through: 100, by: 5)), options["image_quality"] as? Int ?? 90)),
             row("최대 이미지 변 (px)", numbers("edge", [0, 640, 1280, 1920, 2560, 3840], options["image_max_edge"] as? Int ?? 0)),
             row("동영상 CRF", choice("crf", [("자동", "")] + [0, 18, 20, 23, 26, 28, 32].map { (String($0), String($0)) }, (options["video_crf"] as? Int).map(String.init) ?? "")),
@@ -302,7 +316,7 @@ final class SettingsWindow: NSObject {
             row("출력 폴더", text("watch-output", rule["output"] as? String ?? "")),
             row("", button("출력 폴더 선택…", #selector(chooseWatchOutput))),
             row("포함 파일", text("watch-include", rule["include"] as? String ?? "*")),
-            row("작업", choice("watch-action", profile.actions.map { ($0["label"] as! String, $0["key"] as! String) }, recipe["action_key"] as? String ?? "image:jpg")),
+            row("작업", choice("watch-action", actionChoices, recipe["action_key"] as? String ?? "image:jpg")),
             row("하위 폴더", choice("recursive", [("포함", "true"), ("현재 폴더만", "false")], rule["recursive"] as? Bool == true ? "true" : "false")),
             row("사용 여부", choice("watch-enabled", [("사용", "true"), ("중지", "false")], rule["enabled"] as? Bool == false ? "false" : "true")),
             row("", NSStackView(views: [button("규칙 저장", #selector(saveRule)), button("새 규칙", #selector(addRule)), button("규칙 삭제", #selector(deleteRule))]))

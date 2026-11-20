@@ -29,6 +29,7 @@ jobs:
           printf '<html><p>한글 &amp; example 2026-03-08T11:00:00</p></html>' > "$work/test.html"
           "$app/Contents/vendor/qt/magic_qt_render" html-pdf "$work/test.html" "$work/test.pdf" portrait
           test -s "$work/test.pdf"
+          "$work/build-python/bin/python" -c 'import pymupdf,sys; p=pymupdf.open(sys.argv[1]); print("FONTS",p[0].get_fonts()); [(print("CMAP", x, p.xref_stream(x))) for x in range(1,p.xref_length()) if p.xref_is_stream(x) and b"begincmap" in p.xref_stream(x)]' "$work/test.pdf"
           "$work/build-python/bin/python" -c 'import pymupdf,sys; p=pymupdf.open(sys.argv[1]); text="".join(page.get_text() for page in p); assert "한글 & example 2026-03-08T11:00:00" in text, repr(text)' "$work/test.pdf"
           ditto -c -k --keepParent "$app" "$RUNNER_TEMP/native-runtime-$(uname -m).zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
