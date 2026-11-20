@@ -49,6 +49,8 @@ def bundle(app, entries, search):
                 candidates = [original.parent / dependency.removeprefix("@executable_path/")]
             else:
                 candidates = [Path(dependency)]
+                if not Path(dependency).is_absolute():
+                    candidates += [root / Path(dependency).name for root in search]
             source = next((path.resolve() for path in candidates if path.is_file()), None)
             if source is None:
                 raise RuntimeError(f"Unresolved dependency {dependency} of {original}")
@@ -73,6 +75,8 @@ def bundle(app, entries, search):
                 subprocess.run(["install_name_tool", "-delete_rpath", value, target], check=True)
         inventory.append({"path": target.relative_to(app).as_posix(),
                           "source": str(original), "sha256": hashlib.sha256(original.read_bytes()).hexdigest()})
+    for target in sorted(processed):
+        subprocess.run(["codesign", "--force", "--sign", "-", target], check=True)
     notices = app / "Contents/Resources/Notices/Native"
     notices.mkdir(parents=True, exist_ok=True)
     cellars = set()
